@@ -1,18 +1,77 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
-import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import * as Notifications from 'expo-notifications';
+import { DarkTheme, router, Stack, ThemeProvider } from 'expo-router';
+import { Pressable, Text } from 'react-native';
+import { SQLiteProvider } from 'expo-sqlite';
+import { StatusBar } from 'expo-status-bar';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
-import AppTabs from '@/components/app-tabs';
+import { Colors } from '@/constants/theme';
+import { DATABASE_NAME, migrate } from '@/db/schema';
 
-SplashScreen.preventAutoHideAsync();
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowBanner: true,
+    shouldShowList: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
-export default function TabLayout() {
-  const colorScheme = useColorScheme();
+const theme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    background: Colors.background,
+    card: Colors.background,
+    primary: Colors.accent,
+    text: Colors.text,
+    border: Colors.border,
+  },
+};
+
+export default function RootLayout() {
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <AnimatedSplashOverlay />
-      <AppTabs />
-    </ThemeProvider>
+    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+      <ThemeProvider value={theme}>
+        <StatusBar style="light" />
+        <Stack screenOptions={{ headerTintColor: Colors.accent, headerTitleStyle: { color: Colors.text } }}>
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          {/* The workout screen sets its own header buttons (minimize, finish). */}
+          <Stack.Screen name="workout" options={{ presentation: 'fullScreenModal', gestureEnabled: false, title: '' }} />
+          <Stack.Screen
+            name="add-exercise"
+            options={{ presentation: 'modal', title: 'Add exercise', headerLeft: () => <HeaderButton label="Close" /> }}
+          />
+          <Stack.Screen
+            name="exercise/[id]"
+            options={{ presentation: 'modal', title: '', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen
+            name="log-workout"
+            options={{ presentation: 'modal', title: 'Log workout', headerLeft: () => <HeaderButton label="Cancel" /> }}
+          />
+          <Stack.Screen
+            name="routine/[id]"
+            options={{ presentation: 'modal', headerLeft: () => <HeaderButton label="Cancel" /> }}
+          />
+          <Stack.Screen
+            name="achievements"
+            options={{ presentation: 'modal', title: 'Achievements', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen
+            name="settings"
+            options={{ presentation: 'modal', title: 'Settings', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen name="history/[id]" options={{ title: 'Workout' }} />
+        </Stack>
+      </ThemeProvider>
+    </SQLiteProvider>
+  );
+}
+
+function HeaderButton({ label }: { label: string }) {
+  return (
+    <Pressable onPress={() => router.back()} hitSlop={12} style={{ paddingHorizontal: 8 }}>
+      <Text style={{ color: Colors.accent, fontSize: 17, fontWeight: '600' }}>{label}</Text>
+    </Pressable>
   );
 }
