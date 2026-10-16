@@ -45,3 +45,16 @@ export function defaultWorkoutName(date: Date): string {
   if (h < 17) return 'Afternoon workout';
   return 'Evening workout';
 }
+
+/** A workout still open after this long was most likely forgotten. */
+export const STALE_WORKOUT_MS = 3 * 60 * 60 * 1000;
+
+export function isStaleWorkout(startedAt: number, now: number): boolean {
+  return now - startedAt > STALE_WORKOUT_MS;
+}
+
+/** "36 h" or "45 min" */
+export function formatElapsed(ms: number): string {
+  const minutes = Math.round(ms / 60000);
+  return minutes >= 120 ? `${Math.round(minutes / 60)} h` : `${minutes} min`;
+}

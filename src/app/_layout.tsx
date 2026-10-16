@@ -33,7 +33,13 @@ export default function RootLayout() {
     <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
-        <Stack screenOptions={{ headerTintColor: Colors.accent, headerTitleStyle: { color: Colors.text } }}>
+        <Stack
+          screenOptions={{
+            headerTintColor: Colors.accent,
+            headerTitleStyle: { color: Colors.text },
+            // Arrow only: the default label would show the previous route's name, e.g. "(tabs)".
+            headerBackButtonDisplayMode: 'minimal',
+          }}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           {/* The workout screen sets its own header buttons (minimize, finish). */}
           <Stack.Screen name="workout" options={{ presentation: 'fullScreenModal', gestureEnabled: false, title: '' }} />
@@ -60,6 +66,16 @@ export default function RootLayout() {
           <Stack.Screen
             name="settings"
             options={{ presentation: 'modal', title: 'Settings', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          {/* A card, not fullScreenModal: full-screen modals report zero safe-area insets on iOS,
+              which pushed onboarding under the status bar and home indicator. */}
+          <Stack.Screen
+            name="onboarding"
+            options={{ headerShown: false, animation: 'slide_from_bottom', gestureEnabled: false }}
+          />
+          <Stack.Screen
+            name="weight"
+            options={{ presentation: 'modal', title: 'Body weight', headerLeft: () => <HeaderButton label="Cancel" /> }}
           />
           <Stack.Screen name="history/[id]" options={{ title: 'Workout' }} />
         </Stack>

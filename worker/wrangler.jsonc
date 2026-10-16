@@ -1,0 +1,8 @@
+{
+  // Spotter AI relay. Deploy: `npx wrangler@4 deploy` from this folder.
+  // Secrets: `npx wrangler@4 secret put GROQ_API_KEY` and `npx wrangler@4 secret put APP_TOKEN`.
+  "name": "spotter-ai",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-01",
+  "observability": { "enabled": true }
+}

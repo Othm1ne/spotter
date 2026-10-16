@@ -26,6 +26,7 @@ import {
   deleteWorkout,
   finishWorkout,
   getActiveWorkout,
+  getLastSetTime,
   getPreviousSets,
   getWorkoutSets,
   removeExercise,
@@ -36,7 +37,7 @@ import {
   type WorkoutSet,
 } from '@/db/workouts';
 import { useNow } from '@/hooks/use-now';
-import { formatDuration, formatWeight, parseNumber } from '@/lib/workout-math';
+import { formatDuration, formatElapsed, formatWeight, isStaleWorkout, parseNumber } from '@/lib/workout-math';
 import * as restTimer from '@/services/rest-notification';
 
 
@@ -223,29 +224,47 @@ export default function WorkoutScreen() {
     load();
   }
 
-  function onFinish() {
+  async function finish(finishedAt: number) {
+    if (!workout) return;
+    await stopRest();
+    await finishWorkout(db, workout.id, finishedAt);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    router.replace({ pathname: '/history/[id]', params: { id: String(workout.id) } });
+  }
+
+  async function onFinish() {
     if (!workout) return;
     const undone = sets.filter((s) => s.done !== 1).length;
     if (sets.length === undone) {
       Alert.alert('Nothing logged yet', 'Tick at least one set before finishing, or discard the workout.');
       return;
     }
-    Alert.alert(
-      'Finish workout?',
-      undone > 0 ? `${undone} unticked set${undone > 1 ? 's' : ''} will be removed.` : undefined,
-      [
-        { text: 'Keep going', style: 'cancel' },
-        {
-          text: 'Finish',
-          onPress: async () => {
-            await stopRest();
-            await finishWorkout(db, workout.id);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            router.replace({ pathname: '/history/[id]', params: { id: String(workout.id) } });
-          },
-        },
-      ]
-    );
+    const removal = undone > 0 ? `${undone} unticked set${undone > 1 ? 's' : ''} will be removed.` : undefined;
+    const finishedAt = Date.now();
+
+    // Forgotten workout: offer to end it when the last set was ticked instead of now.
+    if (isStaleWorkout(workout.started_at, finishedAt)) {
+      const lastSet = await getLastSetTime(db, workout.id);
+      const fallback = workout.started_at + 60 * 60 * 1000;
+      const endAt = lastSet ?? fallback;
+      const time = new Date(endAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      Alert.alert(
+        'Forgot to finish?',
+        `This workout has been open for ${formatElapsed(finishedAt - workout.started_at)}.` +
+          (removal ? ` ${removal}` : ''),
+        [
+          { text: lastSet ? `End at last set (${time})` : 'Count it as 1 hour', onPress: () => finish(endAt) },
+          { text: 'End now', onPress: () => finish(finishedAt) },
+          { text: 'Keep going', style: 'cancel' },
+        ]
+      );
+      return;
+    }
+
+    Alert.alert('Finish workout?', removal, [
+      { text: 'Keep going', style: 'cancel' },
+      { text: 'Finish', onPress: () => finish(finishedAt) },
+    ]);
   }
 
   function onDiscard() {

@@ -2,12 +2,12 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 export const DEFAULT_WEEKLY_GOAL = 3;
 
-async function getSetting(db: SQLiteDatabase, key: string) {
+export async function getSetting(db: SQLiteDatabase, key: string) {
   const row = await db.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', key);
   return row?.value ?? null;
 }
 
-async function setSetting(db: SQLiteDatabase, key: string, value: string) {
+export async function setSetting(db: SQLiteDatabase, key: string, value: string) {
   await db.runAsync(
     'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     key,

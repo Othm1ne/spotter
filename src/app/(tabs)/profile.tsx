@@ -5,12 +5,14 @@ import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarChart } from '@/components/bar-chart';
+import { BodyWeightCard, PlanCard, SetupCard } from '@/components/plan-cards';
 import { ExerciseThumb } from '@/components/exercise-preview';
 import { Segmented } from '@/components/segmented';
 import { Card, Empty, Screen, SectionTitle, StatTile } from '@/components/ui';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { getSetsPerMuscle } from '@/db/stats';
 import { getExerciseBests, type ExerciseBest } from '@/db/workouts';
+import { useBody } from '@/hooks/use-body';
 import { useStats } from '@/hooks/use-stats';
 import { addDays, dayKey, setsThisWeek, startOfDay, weeklyCounts } from '@/lib/stats';
 import { formatVolume, formatWeight } from '@/lib/workout-math';
@@ -21,6 +23,7 @@ const MUSCLE_DAYS = 30;
 export default function ProfileTab() {
   const db = useSQLiteContext();
   const stats = useStats();
+  const body = useBody();
   const [range, setRange] = useState<(typeof RANGES)[number]>(8);
   const [bests, setBests] = useState<ExerciseBest[]>([]);
   const [muscles, setMuscles] = useState<{ muscle: string; sets: number }[]>([]);
@@ -62,6 +65,16 @@ export default function ProfileTab() {
         </View>
       }>
       <ScrollView contentContainerStyle={styles.content}>
+        {body.loaded && !body.profile && <SetupCard />}
+        {body.profile && (
+          <>
+            <SectionTitle title="Your plan" />
+            <PlanCard body={body} />
+            <SectionTitle title="Body weight" />
+            <BodyWeightCard body={body} />
+            <SectionTitle title="Training" />
+          </>
+        )}
         <View style={styles.tiles}>
           <StatTile label="Workouts" value={String(stats.workouts.length)} />
           <StatTile label="Total sets" value={String(stats.totals.sets)} />

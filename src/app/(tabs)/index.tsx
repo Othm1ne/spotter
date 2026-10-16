@@ -5,18 +5,21 @@ import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActivityCalendar, ActivityLegend } from '@/components/activity-calendar';
+import { SetupCard } from '@/components/plan-cards';
 import { Button, Card, Screen, SectionTitle, StatTile } from '@/components/ui';
 import { Colors, Radius, Spacing } from '@/constants/theme';
 import { listRoutines, startRoutine, type RoutineSummary } from '@/db/routines';
 import { getActiveWorkout, listFinishedWorkouts, startWorkout, type Workout, type WorkoutSummary } from '@/db/workouts';
 import { useNow } from '@/hooks/use-now';
+import { useBody } from '@/hooks/use-body';
 import { useStats } from '@/hooks/use-stats';
 import { dayKey, parseDayKey, startOfDay, weeklyCounts } from '@/lib/stats';
-import { formatDuration, formatVolume } from '@/lib/workout-math';
+import { formatDuration, formatElapsed, formatVolume, isStaleWorkout } from '@/lib/workout-math';
 
 export default function HomeTab() {
   const db = useSQLiteContext();
   const stats = useStats();
+  const body = useBody();
   const [active, setActive] = useState<Workout | null>(null);
   const [last, setLast] = useState<WorkoutSummary | null>(null);
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
@@ -58,11 +61,35 @@ export default function HomeTab() {
   return (
     <Screen title="Spotter" right={<StreakPill days={stats.dayStreak.current} />}>
       <ScrollView contentContainerStyle={styles.content}>
+        {body.loaded && !body.profile && <SetupCard />}
+        {body.profile && body.targets && (
+          <View style={styles.today}>
+            <Pressable onPress={() => router.push('/profile')} style={({ pressed }) => [styles.todayTargets, pressed && { opacity: 0.7 }]}>
+              <Text style={styles.todayLabel}>{greeting(now, body.profile.name)}</Text>
+              <Text style={styles.todayValue}>
+                {body.targets.calories.toLocaleString()} kcal · {body.targets.protein} g protein
+              </Text>
+            </Pressable>
+            {!body.loggedToday && (
+              <Pressable onPress={() => router.push('/weight')} style={styles.weighIn}>
+                <Ionicons name="scale-outline" size={18} color={Colors.accentText} />
+                <Text style={styles.weighInText}>Weigh in</Text>
+              </Pressable>
+            )}
+          </View>
+        )}
         {active ? (
           <Card style={styles.activeCard}>
             <Text style={styles.label}>IN PROGRESS</Text>
             <Text style={styles.cardTitle}>{active.name}</Text>
-            <Text style={styles.timer}>{formatDuration((now - active.started_at) / 1000)}</Text>
+            {isStaleWorkout(active.started_at, now) ? (
+              <Text style={styles.stale}>
+                Open for {formatElapsed(now - active.started_at)}. Forgot to finish? Resume it and tap Finish, and
+                Spotter will end it at your last set.
+              </Text>
+            ) : (
+              <Text style={styles.timer}>{formatDuration((now - active.started_at) / 1000)}</Text>
+            )}
             <Button label="Resume workout" onPress={() => router.push('/workout')} />
           </Card>
         ) : null}
@@ -196,6 +223,12 @@ export default function HomeTab() {
   );
 }
 
+function greeting(now: number, name: string) {
+  const h = new Date(now).getHours();
+  const part = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  return name ? `${part}, ${name}` : part;
+}
+
 function daysAgo(time: number, now: number) {
   const days = Math.floor((startOfDay(now).getTime() - startOfDay(time).getTime()) / (24 * 3600 * 1000));
   if (days <= 0) return 'done today';
@@ -218,6 +251,7 @@ const styles = StyleSheet.create({
   activeCard: { borderWidth: 1, borderColor: Colors.accent },
   label: { color: Colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
   cardTitle: { color: Colors.text, fontSize: 18, fontWeight: '700' },
+  stale: { color: '#FFB547', fontSize: 14, lineHeight: 20 },
   timer: { color: Colors.text, fontSize: 28, fontWeight: '800', fontVariant: ['tabular-nums'] },
   section: { color: Colors.text, fontSize: 20, fontWeight: '800', marginTop: Spacing.sm },
   stats: { flexDirection: 'row', gap: Spacing.sm },
@@ -240,6 +274,20 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
   },
   dayRowName: { color: Colors.text, fontSize: 15, fontWeight: '600', flex: 1 },
+  today: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  todayTargets: { flex: 1, gap: 2 },
+  todayLabel: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  todayValue: { color: Colors.text, fontSize: 17, fontWeight: '800' },
+  weighIn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.accent,
+    borderRadius: Radius.pill,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  weighInText: { color: Colors.accentText, fontWeight: '800' },
   newButton: {
     flexDirection: 'row',
     alignItems: 'center',

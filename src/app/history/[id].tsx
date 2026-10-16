@@ -1,12 +1,19 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { Button, Card } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
 import { routineFromWorkout } from '@/db/routines';
-import { deleteWorkout, getWorkout, getWorkoutSets, type Workout, type WorkoutSet } from '@/db/workouts';
+import {
+  deleteWorkout,
+  getWorkout,
+  getWorkoutSets,
+  setWorkoutDuration,
+  type Workout,
+  type WorkoutSet,
+} from '@/db/workouts';
 import { estimateOneRepMax, formatDuration, formatVolume, formatWeight, setVolume } from '@/lib/workout-math';
 
 export default function WorkoutDetailScreen() {
@@ -42,6 +49,20 @@ export default function WorkoutDetailScreen() {
     router.push({ pathname: '/routine/[id]', params: { id: String(id) } });
   }
 
+  function onEditDuration() {
+    const options = [30, 45, 60, 75, 90, 120];
+    Alert.alert('How long did it last?', 'Fix the duration if you forgot to finish the workout.', [
+      ...options.map((minutes) => ({
+        text: minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60}` : ''}`,
+        onPress: async () => {
+          await setWorkoutDuration(db, workout!.id, minutes);
+          setWorkout(await getWorkout(db, workout!.id));
+        },
+      })),
+      { text: 'Cancel', style: 'cancel' as const },
+    ]);
+  }
+
   function onDelete() {
     Alert.alert('Delete workout?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
@@ -69,7 +90,7 @@ export default function WorkoutDetailScreen() {
         })}
       </Text>
       <View style={styles.stats}>
-        <Summary value={formatDuration(duration)} label="Duration" />
+        <Summary value={formatDuration(duration)} label="Duration ✎" onPress={onEditDuration} />
         <Summary value={String(sets.length)} label="Sets" />
         <Summary value={formatVolume(volume)} label="Volume" />
       </View>
@@ -98,12 +119,16 @@ export default function WorkoutDetailScreen() {
   );
 }
 
-function Summary({ value, label }: { value: string; label: string }) {
+function Summary({ value, label, onPress }: { value: string; label: string; onPress?: () => void }) {
   return (
-    <Card style={styles.summary}>
-      <Text style={styles.summaryValue}>{value}</Text>
-      <Text style={styles.date}>{label}</Text>
-    </Card>
+    <Pressable onPress={onPress} disabled={!onPress} style={{ flex: 1 }}>
+      <Card style={styles.summary}>
+        <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit>
+          {value}
+        </Text>
+        <Text style={styles.date}>{label}</Text>
+      </Card>
+    </Pressable>
   );
 }
 
@@ -111,7 +136,7 @@ const styles = StyleSheet.create({
   content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 60 },
   date: { color: Colors.textSecondary, fontSize: 14 },
   stats: { flexDirection: 'row', gap: Spacing.sm },
-  summary: { flex: 1, alignItems: 'center', paddingHorizontal: Spacing.sm },
+  summary: { alignItems: 'center', paddingHorizontal: Spacing.sm },
   summaryValue: { color: Colors.text, fontSize: 20, fontWeight: '800' },
   exercise: { color: Colors.accent, fontSize: 17, fontWeight: '700' },
   setRow: { flexDirection: 'row', gap: Spacing.md },

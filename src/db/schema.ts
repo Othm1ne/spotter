@@ -106,6 +106,29 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       await insert.finalizeAsync();
     }
   },
+  // When each set was ticked (to end forgotten workouts at the last set), and body weight log.
+  async (db) => {
+    await db.execAsync(`
+      ALTER TABLE workout_sets ADD COLUMN completed_at INTEGER;
+      CREATE TABLE body_weights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        measured_at INTEGER NOT NULL,
+        weight REAL NOT NULL
+      );
+      CREATE INDEX body_weights_measured ON body_weights(measured_at);
+    `);
+  },
+  // AI coach conversation.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE coach_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        content TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase) {

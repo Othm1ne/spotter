@@ -194,10 +194,15 @@ export async function updateSet(
   values: { weight: number | null; reps: number | null; done: boolean }
 ) {
   await db.runAsync(
-    'UPDATE workout_sets SET weight = ?, reps = ?, done = ? WHERE id = ?',
+    `UPDATE workout_sets
+     SET weight = ?, reps = ?, done = ?,
+       completed_at = CASE WHEN ? THEN COALESCE(completed_at, ?) ELSE NULL END
+     WHERE id = ?`,
     values.weight,
     values.reps,
     values.done ? 1 : 0,
+    values.done ? 1 : 0,
+    Date.now(),
     setId
   );
 }
@@ -218,7 +223,24 @@ export async function removeExercise(db: SQLiteDatabase, workoutId: number, exer
  * Drops sets that weren't ticked and marks the workout finished.
  * Returns false (and deletes the workout) if nothing was completed.
  */
-export async function finishWorkout(db: SQLiteDatabase, workoutId: number): Promise<boolean> {
+/** When the last set of a workout was ticked, or null if none was (or it predates tracking). */
+export async function getLastSetTime(db: SQLiteDatabase, workoutId: number) {
+  const row = await db.getFirstAsync<{ last: number | null }>(
+    'SELECT MAX(completed_at) AS last FROM workout_sets WHERE workout_id = ? AND done = 1',
+    workoutId
+  );
+  return row?.last ?? null;
+}
+
+export async function setWorkoutDuration(db: SQLiteDatabase, workoutId: number, minutes: number) {
+  await db.runAsync('UPDATE workouts SET finished_at = started_at + ? WHERE id = ?', minutes * 60 * 1000, workoutId);
+}
+
+export async function finishWorkout(
+  db: SQLiteDatabase,
+  workoutId: number,
+  finishedAt = Date.now()
+): Promise<boolean> {
   let kept = false;
   await db.withTransactionAsync(async () => {
     await db.runAsync('DELETE FROM workout_sets WHERE workout_id = ? AND done = 0', workoutId);
@@ -228,7 +250,7 @@ export async function finishWorkout(db: SQLiteDatabase, workoutId: number): Prom
     );
     kept = (row?.n ?? 0) > 0;
     if (kept) {
-      await db.runAsync('UPDATE workouts SET finished_at = ? WHERE id = ?', Date.now(), workoutId);
+      await db.runAsync('UPDATE workouts SET finished_at = ? WHERE id = ?', finishedAt, workoutId);
     } else {
       await db.runAsync('DELETE FROM workouts WHERE id = ?', workoutId);
     }
