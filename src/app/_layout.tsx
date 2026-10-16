@@ -77,6 +77,19 @@ export default function RootLayout() {
             name="weight"
             options={{ presentation: 'modal', title: 'Body weight', headerLeft: () => <HeaderButton label="Cancel" /> }}
           />
+          <Stack.Screen
+            name="coach-history"
+            options={{ presentation: 'modal', title: 'Chats', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen
+            name="food/add"
+            options={{ presentation: 'modal', title: 'Add food', headerLeft: () => <HeaderButton label="Close" /> }}
+          />
+          <Stack.Screen name="food/[id]" options={{ presentation: 'modal', title: 'Add food' }} />
+          <Stack.Screen
+            name="program"
+            options={{ presentation: 'modal', title: 'Program', headerRight: () => <HeaderButton label="Done" /> }}
+          />
           <Stack.Screen name="history/[id]" options={{ title: 'Workout' }} />
         </Stack>
       </ThemeProvider>

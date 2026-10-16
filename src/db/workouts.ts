@@ -28,6 +28,8 @@ export type WorkoutSet = {
   reps: number | null;
   done: number;
   rest_seconds: number | null;
+  /** Progression advice for the exercise, on its first set. */
+  hint: string | null;
 };
 
 export type PreviousSet = { weight: number | null; reps: number | null };
@@ -126,6 +128,39 @@ export async function getPreviousSets(
   for (const { exercise_id, weight, reps } of rows) {
     const list = result.get(exercise_id) ?? [];
     list.push({ weight, reps });
+    result.set(exercise_id, list);
+  }
+  return result;
+}
+
+/**
+ * Each exercise's completed sets from its last `sessions` finished workouts, newest first:
+ * the history that progression suggestions are based on.
+ */
+export async function getExerciseHistory(
+  db: SQLiteDatabase,
+  exerciseIds: number[],
+  sessions = 4
+): Promise<Map<number, PreviousSet[][]>> {
+  const result = new Map<number, PreviousSet[][]>();
+  if (exerciseIds.length === 0) return result;
+  const placeholders = exerciseIds.map(() => '?').join(',');
+  const rows = await db.getAllAsync<PreviousSet & { exercise_id: number; workout_id: number }>(
+    `SELECT ws.exercise_id, ws.workout_id, ws.weight, ws.reps
+     FROM workout_sets ws JOIN workouts w ON w.id = ws.workout_id
+     WHERE ws.exercise_id IN (${placeholders}) AND ws.done = 1 AND w.finished_at IS NOT NULL
+     ORDER BY w.started_at DESC, ws.exercise_position, ws.set_index`,
+    ...exerciseIds
+  );
+  const lastWorkout = new Map<number, number>();
+  for (const { exercise_id, workout_id, weight, reps } of rows) {
+    const list = result.get(exercise_id) ?? [];
+    if (lastWorkout.get(exercise_id) !== workout_id) {
+      if (list.length >= sessions) continue;
+      list.push([]);
+      lastWorkout.set(exercise_id, workout_id);
+    }
+    list[list.length - 1].push({ weight, reps });
     result.set(exercise_id, list);
   }
   return result;

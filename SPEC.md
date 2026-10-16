@@ -23,7 +23,8 @@ A premium-feeling fitness app for me and my friends: log training fast, follow a
 - `workouts`: name, started_at, finished_at (NULL = in progress), routine_id.
 - `workout_sets`: workout, exercise, order, set index, weight, reps, done, rest_seconds, completed_at.
 - `body_weights`: one weigh-in per day.
-- `coach_messages`: the AI coach conversation.
+- `coach_conversations`, `coach_messages`: saved AI coach chats.
+- `foods` (per 100 g, barcode, favorite, last amount), `food_entries` (day, meal, nutrients snapshot), `water` (ml per day).
 - `settings`: key/value (weekly goal, profile JSON).
 
 ## Done
@@ -34,9 +35,9 @@ A premium-feeling fitness app for me and my friends: log training fast, follow a
 ## Roadmap (build in this order, test each phase on the phone before the next)
 0. **Cleanup** ✅: forgotten workouts end at the last ticked set; durations editable in history.
 1. **You & your goal** ✅: onboarding (body stats, activity, goal, experience, schedule, equipment, injuries); calorie and macro targets (Mifflin-St Jeor + goal adjustment, with safe floors); body weight log with trend; targets adapt when the trend stalls.
-4. **Meal tracking**: Nutrition tab with daily calories/macros vs targets; add food by Open Food Facts search, barcode scan, AI text description, AI photo; water; favorites and recents.
+4. **Meal tracking** ✅: Nutrition tab with daily calories/macros vs targets; add food by Open Food Facts search, barcode scan, AI text description; water; favorites, recents and "your usual" per meal; copy yesterday's meal. Photo logging waits for a free vision model.
 2. **AI coach** ✅: Cloudflare Worker proxy; Coach tab chat that knows your profile, training and meals; guardrails (no medical advice, no unhealthy dieting).
-3. **AI program**: generate a multi-week program from your profile using library exercises, saved as workout plans; today's workout on Home; smart progression (suggested weights, plateau detection).
+3. **AI program** ✅: AI builds a multi-week program from your profile, picking from an equipment-filtered, injury-aware exercise list (offline template fallback); days saved as workout plans; next workout on Home; double progression with suggested weights, first-time and plateau (deload) hints.
 5. **Nutrition & supplements**: AI daily/weekly nutrition review; hand-written evidence-based supplement guide (creatine, whey, caffeine, vitamin D, omega-3…) with coach follow-ups.
 6. **Daily dashboard**: Home shows today's workout, calories left, streak and a coach tip; tabs Home · Train · Nutrition · Coach · Profile.
 

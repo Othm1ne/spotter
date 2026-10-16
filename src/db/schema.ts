@@ -129,6 +129,83 @@ const MIGRATIONS: ((db: SQLiteDatabase) => Promise<void>)[] = [
       );
     `);
   },
+  // Several coach conversations instead of one; existing messages become the first conversation.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE coach_conversations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        title TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      ALTER TABLE coach_messages ADD COLUMN conversation_id INTEGER REFERENCES coach_conversations(id) ON DELETE CASCADE;
+      CREATE INDEX coach_messages_conversation ON coach_messages(conversation_id);
+      INSERT INTO coach_conversations (title, created_at, updated_at)
+        SELECT COALESCE((SELECT substr(content, 1, 60) FROM coach_messages WHERE role = 'user' ORDER BY id LIMIT 1), 'Chat'),
+          MIN(created_at), MAX(created_at)
+        FROM coach_messages HAVING COUNT(*) > 0;
+      UPDATE coach_messages SET conversation_id = (SELECT MAX(id) FROM coach_conversations);
+    `);
+  },
+  // Meal tracking: saved foods (per 100 g), the daily food log and water.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE foods (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        brand TEXT,
+        barcode TEXT UNIQUE,
+        kcal REAL NOT NULL,
+        protein REAL NOT NULL,
+        carbs REAL NOT NULL,
+        fat REAL NOT NULL,
+        serving_g REAL,
+        source TEXT NOT NULL,
+        favorite INTEGER NOT NULL DEFAULT 0,
+        last_grams REAL,
+        last_used_at INTEGER,
+        created_at INTEGER NOT NULL
+      );
+      CREATE TABLE food_entries (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        day TEXT NOT NULL,
+        meal TEXT NOT NULL,
+        food_id INTEGER REFERENCES foods(id) ON DELETE SET NULL,
+        name TEXT NOT NULL,
+        grams REAL,
+        kcal REAL NOT NULL,
+        protein REAL NOT NULL,
+        carbs REAL NOT NULL,
+        fat REAL NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX food_entries_day ON food_entries(day);
+      CREATE INDEX food_entries_food ON food_entries(food_id);
+      CREATE TABLE water (
+        day TEXT PRIMARY KEY NOT NULL,
+        ml INTEGER NOT NULL
+      );
+    `);
+  },
+  // Training program: its days are workout plans; rep ranges drive progression, hints explain it.
+  async (db) => {
+    await db.execAsync(`
+      CREATE TABLE programs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        summary TEXT NOT NULL,
+        weeks INTEGER NOT NULL,
+        source TEXT NOT NULL,
+        started_at INTEGER NOT NULL
+      );
+      ALTER TABLE routines ADD COLUMN program_id INTEGER REFERENCES programs(id) ON DELETE CASCADE;
+      ALTER TABLE routines ADD COLUMN program_day INTEGER;
+      ALTER TABLE routines ADD COLUMN focus TEXT;
+      ALTER TABLE routine_exercises ADD COLUMN rep_min INTEGER;
+      ALTER TABLE routine_exercises ADD COLUMN rep_max INTEGER;
+      ALTER TABLE workout_sets ADD COLUMN hint TEXT;
+    `);
+  },
 ];
 
 export async function migrate(db: SQLiteDatabase) {

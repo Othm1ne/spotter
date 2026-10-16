@@ -42,7 +42,15 @@ import * as restTimer from '@/services/rest-notification';
 
 
 type Draft = { weight: string; reps: string };
-type Block = { position: number; exerciseId: number; name: string; muscle: string; gif: string | null; sets: WorkoutSet[] };
+type Block = {
+  position: number;
+  exerciseId: number;
+  name: string;
+  muscle: string;
+  gif: string | null;
+  hint: string | null;
+  sets: WorkoutSet[];
+};
 
 function secondsFromNow(seconds: number) {
   return Date.now() + seconds * 1000;
@@ -107,6 +115,7 @@ export default function WorkoutScreen() {
         exerciseId: s.exercise_id,
         name: s.exercise_name,
         muscle: s.muscle,
+        hint: s.hint,
         gif: s.gif,
         sets: [],
       };
@@ -342,6 +351,13 @@ export default function WorkoutScreen() {
                   </Pressable>
                 </View>
 
+                {block.hint && (
+                  <View style={styles.hint}>
+                    <Ionicons name="bulb-outline" size={14} color={Colors.accent} />
+                    <Text style={styles.hintText}>{block.hint}</Text>
+                  </View>
+                )}
+
                 <Pressable onPress={() => toggleEditing(block.position)} hitSlop={6} style={styles.summary}>
                   <Text style={styles.summaryText}>{summarize(block, prevSets)}</Text>
                   <Ionicons
@@ -469,6 +485,8 @@ const styles = StyleSheet.create({
   blockTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   exerciseName: { color: Colors.accent, fontSize: 18, fontWeight: '700' },
   muscle: { color: Colors.textSecondary, fontSize: 13 },
+  hint: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, alignSelf: 'flex-start' },
+  hintText: { color: Colors.accent, fontSize: 13, fontWeight: '600', flexShrink: 1 },
   menu: { color: Colors.textSecondary, fontSize: 18, fontWeight: '800', paddingHorizontal: Spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   colHead: { color: Colors.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'center' },

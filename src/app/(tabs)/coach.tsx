@@ -1,11 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useFocusEffect } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useEffect, useState } from 'react';
 import {
-  Alert,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -23,9 +22,12 @@ import { RichText } from '@/components/rich-text';
 import { Colors, HeroGradient, Radius, Spacing } from '@/constants/theme';
 import {
   addCoachMessage,
-  clearCoachMessages,
+  createConversation,
+  deleteCoachMessage,
   gatherCoachData,
+  getActiveConversation,
   listCoachMessages,
+  setActiveConversation,
   type CoachData,
   type CoachMessage,
 } from '@/db/coach';
@@ -39,6 +41,7 @@ const timestamp = () => Date.now();
 
 export default function CoachTab() {
   const db = useSQLiteContext();
+  const [conversationId, setConversationId] = useState<number | null>(null);
   const [messages, setMessages] = useState<CoachMessage[]>([]);
   const [data, setData] = useState<CoachData | null>(null);
   const [input, setInput] = useState('');
@@ -47,8 +50,14 @@ export default function CoachTab() {
 
   useFocusEffect(
     useCallback(() => {
-      listCoachMessages(db).then(setMessages);
-      gatherCoachData(db).then(setData);
+      (async () => {
+        // The history screen may have picked another conversation.
+        const id = await getActiveConversation(db);
+        setConversationId(id);
+        setMessages(id ? await listCoachMessages(db, id) : []);
+        setError(null);
+        setData(await gatherCoachData(db));
+      })();
     }, [db])
   );
 
@@ -59,8 +68,17 @@ export default function CoachTab() {
     setInput('');
     setError(null);
     setSending(true);
-    const id = await addCoachMessage(db, 'user', content);
-    const history = [...messages, { id, role: 'user' as const, content, created_at: timestamp() }];
+    let conversation = conversationId;
+    if (conversation === null) {
+      conversation = await createConversation(db, content);
+      await setActiveConversation(db, conversation);
+      setConversationId(conversation);
+    }
+    const id = await addCoachMessage(db, conversation, 'user', content);
+    const history = [
+      ...messages,
+      { id, conversation_id: conversation, role: 'user' as const, content, created_at: timestamp() },
+    ];
     setMessages(history);
     try {
       // Fresh data every time, so the coach sees the workout you just finished.
@@ -71,8 +89,11 @@ export default function CoachTab() {
         ...history.slice(-CONTEXT_MESSAGES).map((m) => ({ role: m.role, content: m.content })),
       ];
       const reply = await aiChat(request);
-      const replyId = await addCoachMessage(db, 'assistant', reply);
-      setMessages((all) => [...all, { id: replyId, role: 'assistant', content: reply, created_at: timestamp() }]);
+      const replyId = await addCoachMessage(db, conversation, 'assistant', reply);
+      setMessages((all) => [
+        ...all,
+        { id: replyId, conversation_id: conversation, role: 'assistant', content: reply, created_at: timestamp() },
+      ]);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       setError(aiErrorMessage(e));
@@ -86,22 +107,15 @@ export default function CoachTab() {
     if (!last || last.role !== 'user') return;
     // Resend the unanswered question without storing it twice.
     setMessages((all) => all.slice(0, -1));
-    db.runAsync('DELETE FROM coach_messages WHERE id = ?', last.id).then(() => send(last.content));
+    deleteCoachMessage(db, last.id).then(() => send(last.content));
   }
 
-  function onClear() {
-    Alert.alert('Start a new chat?', 'This conversation will be deleted.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Clear',
-        style: 'destructive',
-        onPress: async () => {
-          await clearCoachMessages(db);
-          setMessages([]);
-          setError(null);
-        },
-      },
-    ]);
+  async function onNewChat() {
+    Haptics.selectionAsync();
+    await setActiveConversation(db, null);
+    setConversationId(null);
+    setMessages([]);
+    setError(null);
   }
 
   const name = data?.profile?.name;
@@ -118,11 +132,20 @@ export default function CoachTab() {
             <Text style={styles.subtitle}>{sending ? 'Thinking…' : 'Knows your training and goal'}</Text>
           </View>
         </View>
-        {messages.length > 0 && (
-          <Pressable onPress={onClear} hitSlop={10} style={styles.iconButton} accessibilityLabel="New chat">
-            <Ionicons name="create-outline" size={22} color={Colors.text} />
+        <View style={styles.headerButtons}>
+          <Pressable
+            onPress={() => router.push('/coach-history')}
+            hitSlop={10}
+            style={styles.iconButton}
+            accessibilityLabel="Past chats">
+            <Ionicons name="time-outline" size={22} color={Colors.text} />
           </Pressable>
-        )}
+          {messages.length > 0 && (
+            <Pressable onPress={onNewChat} hitSlop={10} style={styles.iconButton} accessibilityLabel="New chat">
+              <Ionicons name="create-outline" size={22} color={Colors.text} />
+            </Pressable>
+          )}
+        </View>
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -254,6 +277,7 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
   },
   headerTitle: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  headerButtons: { flexDirection: 'row', gap: Spacing.sm },
   title: { color: Colors.text, fontSize: 20, fontWeight: '800' },
   subtitle: { color: Colors.textSecondary, fontSize: 12 },
   iconButton: {

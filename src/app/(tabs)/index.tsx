@@ -2,17 +2,22 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ActivityCalendar, ActivityLegend } from '@/components/activity-calendar';
 import { SetupCard } from '@/components/plan-cards';
+import { ProgramCard } from '@/components/program-card';
 import { Button, Card, Screen, SectionTitle, StatTile } from '@/components/ui';
 import { Colors, Radius, Spacing } from '@/constants/theme';
-import { listRoutines, startRoutine, type RoutineSummary } from '@/db/routines';
+import { listEntries } from '@/db/food';
+import { getProgram, type Program } from '@/db/program';
+import { listRoutines, type RoutineSummary } from '@/db/routines';
 import { getActiveWorkout, listFinishedWorkouts, startWorkout, type Workout, type WorkoutSummary } from '@/db/workouts';
 import { useNow } from '@/hooks/use-now';
 import { useBody } from '@/hooks/use-body';
+import { useStartRoutine } from '@/hooks/use-start-routine';
 import { useStats } from '@/hooks/use-stats';
+import { sum, ZERO, type Nutrients } from '@/lib/food';
 import { dayKey, parseDayKey, startOfDay, weeklyCounts } from '@/lib/stats';
 import { formatDuration, formatElapsed, formatVolume, isStaleWorkout } from '@/lib/workout-math';
 
@@ -23,6 +28,8 @@ export default function HomeTab() {
   const [active, setActive] = useState<Workout | null>(null);
   const [last, setLast] = useState<WorkoutSummary | null>(null);
   const [routines, setRoutines] = useState<RoutineSummary[]>([]);
+  const [program, setProgram] = useState<Program | null>(null);
+  const [eaten, setEaten] = useState<Nutrients>(ZERO);
   const [selected, setSelected] = useState(() => dayKey(new Date()));
   const now = useNow(active !== null);
 
@@ -32,6 +39,8 @@ export default function HomeTab() {
         setActive(await getActiveWorkout(db));
         setLast((await listFinishedWorkouts(db, 1))[0] ?? null);
         setRoutines(await listRoutines(db));
+        setProgram(await getProgram(db));
+        setEaten(sum(await listEntries(db, dayKey(new Date()))));
       })();
     }, [db])
   );
@@ -41,17 +50,8 @@ export default function HomeTab() {
     router.push('/workout');
   }
 
-  async function onStartRoutine(routine: RoutineSummary) {
-    if (active) {
-      Alert.alert('Workout in progress', `Finish or discard "${active.name}" before starting another one.`, [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Resume', onPress: () => router.push('/workout') },
-      ]);
-      return;
-    }
-    await startRoutine(db, routine.id);
-    router.push('/workout');
-  }
+  const startRoutine = useStartRoutine();
+  const onStartRoutine = (routine: RoutineSummary) => startRoutine(routine.id);
 
   const thisWeek = weeklyCounts(stats.workouts, 1, new Date())[0].count;
   const yearCount = stats.workouts.filter((w) => w.started_at > now - 365 * 24 * 3600 * 1000).length;
@@ -64,10 +64,11 @@ export default function HomeTab() {
         {body.loaded && !body.profile && <SetupCard />}
         {body.profile && body.targets && (
           <View style={styles.today}>
-            <Pressable onPress={() => router.push('/profile')} style={({ pressed }) => [styles.todayTargets, pressed && { opacity: 0.7 }]}>
+            <Pressable onPress={() => router.push('/nutrition')} style={({ pressed }) => [styles.todayTargets, pressed && { opacity: 0.7 }]}>
               <Text style={styles.todayLabel}>{greeting(now, body.profile.name)}</Text>
               <Text style={styles.todayValue}>
-                {body.targets.calories.toLocaleString()} kcal · {body.targets.protein} g protein
+                {Math.max(0, Math.round(body.targets.calories - eaten.kcal)).toLocaleString()} kcal left ·{' '}
+                {Math.max(0, Math.round(body.targets.protein - eaten.protein))} g protein to go
               </Text>
             </Pressable>
             {!body.loggedToday && (
@@ -93,6 +94,8 @@ export default function HomeTab() {
             <Button label="Resume workout" onPress={() => router.push('/workout')} />
           </Card>
         ) : null}
+
+        {body.profile && !active && <ProgramCard program={program} now={now} onStart={startRoutine} />}
 
         <SectionTitle
           title="My workouts"

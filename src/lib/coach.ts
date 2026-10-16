@@ -8,7 +8,11 @@ type TopSet = { exercise: string; sets: number; weight: number | null; reps: num
 type Workout = { name: string; started_at: number; top: TopSet[] };
 type Best = { name: string; best_weight: number; best_weight_reps: number; best_e1rm: number; times: number };
 
+type FoodItem = { name: string; meal: string; kcal: number; protein: number; carbs: number; fat: number };
+
 export type CoachInput = {
+  todayFood: FoodItem[];
+  lastWeekFood: { day: string; kcal: number; protein: number }[];
   profile: Profile | null;
   weights: WeightEntry[];
   weeklyGoal: number;
@@ -17,6 +21,8 @@ export type CoachInput = {
 };
 
 const RULES = `You are Spotter Coach, a friendly, expert strength and nutrition coach inside the Spotter gym app.
+
+Scope: only training, exercise technique, programming, nutrition, supplements, body composition, recovery, sleep and motivation for training, and the Spotter app. If the user asks about anything else, say in one or two sentences that you can only help with training, nutrition and recovery, and suggest a related question they could ask instead.
 
 How to answer:
 - Be concise and practical: 2–4 short paragraphs or one bullet list, bold for key numbers. Under 150 words unless the user asks for more detail.
@@ -75,6 +81,28 @@ function trainingSection(input: CoachInput, now: Date): string {
   return `Weekly workout goal: ${input.weeklyGoal}\nRecent workouts (newest first):\n${recent}\nBest lifts:\n${bests}`;
 }
 
+function nutritionSection(input: CoachInput): string {
+  const lines: string[] = [];
+  if (input.todayFood.length > 0) {
+    const t = input.todayFood.reduce(
+      (s, f) => ({ kcal: s.kcal + f.kcal, protein: s.protein + f.protein, carbs: s.carbs + f.carbs, fat: s.fat + f.fat }),
+      { kcal: 0, protein: 0, carbs: 0, fat: 0 }
+    );
+    lines.push(
+      `Eaten today so far: ${Math.round(t.kcal)} kcal, protein ${Math.round(t.protein)} g, carbs ${Math.round(t.carbs)} g, fat ${Math.round(t.fat)} g`
+    );
+    lines.push(`Foods today: ${input.todayFood.map((f) => `${f.name} (${f.meal}, ${Math.round(f.kcal)} kcal)`).join('; ')}`);
+  } else {
+    lines.push('No food logged today yet.');
+  }
+  const days = input.lastWeekFood;
+  if (days.length > 0) {
+    const avg = (k: 'kcal' | 'protein') => Math.round(days.reduce((s, d) => s + d[k], 0) / days.length);
+    lines.push(`Last 7 days (${days.length} days logged): average ${avg('kcal')} kcal and ${avg('protein')} g protein per day`);
+  }
+  return lines.join('\n');
+}
+
 export function buildCoachPrompt(input: CoachInput, now: Date): string {
   return `${RULES}
 
@@ -84,7 +112,10 @@ USER PROFILE
 ${profileSection(input, now)}
 
 TRAINING
-${trainingSection(input, now)}`;
+${trainingSection(input, now)}
+
+NUTRITION (logged in the app)
+${nutritionSection(input)}`;
 }
 
 /** Starter questions, picked from what we know about the user. */
@@ -95,6 +126,7 @@ export function suggestedQuestions(input: CoachInput): string[] {
   if (p?.goal === 'lose_fat') out.push('How do I keep my muscle while losing fat?');
   if (p?.goal === 'build_muscle') out.push('How fast should I add weight to my lifts?');
   if (input.bests[0]) out.push(`How can I improve my ${input.bests[0].name}?`);
+  if (input.todayFood.length > 0) out.push('How is my eating today?');
   out.push('What should I eat before and after training?');
   out.push('Which supplements are actually worth it?');
   if (!p) out.push('Help me pick a goal');

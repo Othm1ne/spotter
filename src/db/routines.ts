@@ -1,6 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { getPreviousSets, type Exercise } from './workouts';
+import { suggestNext, weightIncrement } from '@/lib/program';
+
+import { getExerciseHistory, getPreviousSets, type Exercise } from './workouts';
 
 export const DEFAULT_REST_SECONDS = 90;
 
@@ -19,6 +21,9 @@ export type RoutineExercise = {
   exercise: Exercise;
   restSeconds: number;
   sets: RoutineSet[];
+  /** Rep range of a program exercise: workouts started from it get progression suggestions. */
+  repMin?: number | null;
+  repMax?: number | null;
 };
 
 export type Routine = { id: number; name: string; exercises: RoutineExercise[] };
@@ -35,6 +40,7 @@ export function listRoutines(db: SQLiteDatabase) {
        )) AS exercises,
        (SELECT MAX(w.started_at) FROM workouts w WHERE w.routine_id = r.id AND w.finished_at IS NOT NULL) AS last_done
      FROM routines r
+     WHERE r.program_id IS NULL
      ORDER BY r.created_at DESC`
   );
 }
@@ -46,12 +52,14 @@ export async function getRoutine(db: SQLiteDatabase, id: number): Promise<Routin
     Exercise & {
       routine_exercise_id: number;
       rest_seconds: number;
+      rep_min: number | null;
+      rep_max: number | null;
       set_index: number | null;
       weight: number | null;
       reps: number | null;
     }
   >(
-    `SELECT re.id AS routine_exercise_id, re.rest_seconds, e.id, e.name, e.muscle, e.equipment, e.gif,
+    `SELECT re.id AS routine_exercise_id, re.rest_seconds, re.rep_min, re.rep_max, e.id, e.name, e.muscle, e.equipment, e.gif,
        rs.set_index, rs.weight, rs.reps
      FROM routine_exercises re
      JOIN exercises e ON e.id = re.exercise_id
@@ -67,6 +75,8 @@ export async function getRoutine(db: SQLiteDatabase, id: number): Promise<Routin
       block = {
         exercise: { id: r.id, name: r.name, muscle: r.muscle, equipment: r.equipment, gif: r.gif },
         restSeconds: r.rest_seconds,
+        repMin: r.rep_min,
+        repMax: r.rep_max,
         sets: [],
       };
       exercises.set(r.routine_exercise_id, block);
@@ -93,13 +103,15 @@ export async function saveRoutine(
     }
     for (const [position, block] of routine.exercises.entries()) {
       const re = await db.runAsync(
-        `INSERT INTO routine_exercises (routine_id, exercise_id, position, target_sets, rest_seconds)
-         VALUES (?, ?, ?, ?, ?)`,
+        `INSERT INTO routine_exercises (routine_id, exercise_id, position, target_sets, rest_seconds, rep_min, rep_max)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
         id,
         block.exercise.id,
         position,
         block.sets.length,
-        block.restSeconds
+        block.restSeconds,
+        block.repMin ?? null,
+        block.repMax ?? null
       );
       for (const [index, set] of block.sets.entries()) {
         await db.runAsync(
@@ -122,14 +134,14 @@ export async function deleteRoutine(db: SQLiteDatabase, id: number) {
 /**
  * Starts a workout pre-filled from the routine: each set gets the routine's reps, and its weight
  * (or the weight used last time when the routine leaves it blank) and the exercise's rest time.
+ * Program exercises (with a rep range) get the progression suggestion instead, with a hint.
  */
 export async function startRoutine(db: SQLiteDatabase, routineId: number): Promise<number> {
   const routine = await getRoutine(db, routineId);
   if (!routine) throw new Error(`Routine ${routineId} not found`);
-  const previous = await getPreviousSets(
-    db,
-    routine.exercises.map((e) => e.exercise.id)
-  );
+  const ids = routine.exercises.map((e) => e.exercise.id);
+  const previous = await getPreviousSets(db, ids);
+  const history = await getExerciseHistory(db, ids);
   let id = 0;
   await db.withTransactionAsync(async () => {
     const result = await db.runAsync(
@@ -141,17 +153,28 @@ export async function startRoutine(db: SQLiteDatabase, routineId: number): Promi
     id = result.lastInsertRowId;
     for (const [position, block] of routine.exercises.entries()) {
       const last = previous.get(block.exercise.id) ?? [];
+      const { exercise, repMin, repMax } = block;
+      const suggestion =
+        repMin && repMax
+          ? suggestNext(
+              history.get(exercise.id) ?? [],
+              repMin,
+              repMax,
+              weightIncrement(exercise.name, exercise.muscle, exercise.equipment)
+            )
+          : null;
       for (const [index, set] of block.sets.entries()) {
         await db.runAsync(
-          `INSERT INTO workout_sets (workout_id, exercise_id, exercise_position, set_index, weight, reps, rest_seconds)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO workout_sets (workout_id, exercise_id, exercise_position, set_index, weight, reps, rest_seconds, hint)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           id,
-          block.exercise.id,
+          exercise.id,
           position,
           index,
-          set.weight ?? last[index]?.weight ?? null,
-          set.reps ?? last[index]?.reps ?? null,
-          block.restSeconds
+          suggestion ? (suggestion.weight ?? set.weight) : (set.weight ?? last[index]?.weight ?? null),
+          suggestion ? suggestion.reps : (set.reps ?? last[index]?.reps ?? null),
+          block.restSeconds,
+          index === 0 ? (suggestion?.hint ?? null) : null
         );
       }
     }

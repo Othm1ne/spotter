@@ -11,7 +11,8 @@ import { DEFAULT_REST_SECONDS, deleteRoutine, getRoutine, saveRoutine } from '@/
 import { getPreviousSets, type Exercise } from '@/db/workouts';
 import { formatWeight, parseNumber } from '@/lib/workout-math';
 
-type Block = { key: number; exercise: Exercise; restSeconds: number; sets: DraftSet[] };
+// Program days carry a rep range for progression; keep it through edits.
+type Block = { key: number; exercise: Exercise; restSeconds: number; sets: DraftSet[]; repMin?: number | null; repMax?: number | null };
 
 const DEFAULT_SETS = 3;
 const DEFAULT_REPS = '10';
@@ -40,6 +41,8 @@ export default function RoutineEditorScreen() {
           key: i,
           exercise: e.exercise,
           restSeconds: e.restSeconds,
+          repMin: e.repMin,
+          repMax: e.repMax,
           sets: e.sets.map((s) => ({ weight: toText(s.weight), reps: toText(s.reps) })),
         }))
       );
@@ -76,6 +79,8 @@ export default function RoutineEditorScreen() {
       exercises: blocks.map((b) => ({
         exercise: b.exercise,
         restSeconds: b.restSeconds,
+        repMin: b.repMin,
+        repMax: b.repMax,
         sets: b.sets.map((s) => ({ weight: parseNumber(s.weight), reps: parseNumber(s.reps) })),
       })),
     });
