@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
 import { router, Stack, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -19,7 +20,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ExerciseThumb } from '@/components/exercise-preview';
 import { Button } from '@/components/ui';
 import { Colors, Radius, Spacing } from '@/constants/theme';
-import { DEFAULT_REST_SECONDS } from '@/db/routines';
+import { DEFAULT_REST_SECONDS, getDefaultRest, getKeepAwake } from '@/db/settings';
 import {
   addSet,
   deleteSet,
@@ -51,6 +52,8 @@ type Block = {
   hint: string | null;
   sets: WorkoutSet[];
 };
+
+const KEEP_AWAKE_TAG = 'workout';
 
 function secondsFromNow(seconds: number) {
   return Date.now() + seconds * 1000;
@@ -95,6 +98,21 @@ export default function WorkoutScreen() {
       load();
     }, [load])
   );
+
+  // Settings: the default rest time, and keeping the screen on so the timer stays visible.
+  useEffect(() => {
+    let awake = false;
+    (async () => {
+      setRestSeconds(await getDefaultRest(db));
+      if (await getKeepAwake(db)) {
+        awake = true;
+        await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
+      }
+    })();
+    return () => {
+      if (awake) deactivateKeepAwake(KEEP_AWAKE_TAG);
+    };
+  }, [db]);
 
   // Rest timer reaching zero while the screen is open.
   useEffect(() => {
@@ -147,9 +165,20 @@ export default function WorkoutScreen() {
     return `${formatWeight(weight)} kg × ${reps ?? '–'}`;
   }
 
-  function startRest(endsAt: number) {
+  function startRest(endsAt: number, next?: string | null) {
     setRestEndsAt(endsAt);
-    restTimer.startRest(endsAt);
+    restTimer.startRest(endsAt, next);
+  }
+
+  /** The first set still to do after `after`, for the lock screen: "Bench Press · set 3 · 60 kg × 8". */
+  function nextSetLabel(after: WorkoutSet): string | null {
+    const i = sets.findIndex((s) => s.id === after.id);
+    const next = sets.slice(i + 1).find((s) => s.done !== 1) ?? sets.slice(0, i).find((s) => s.done !== 1);
+    if (!next) return null;
+    const weight = parseNumber(drafts[next.id]?.weight ?? '');
+    const reps = parseNumber(drafts[next.id]?.reps ?? '');
+    const target = weight !== null ? ` · ${formatWeight(weight)} kg × ${reps ?? '–'}` : reps !== null ? ` · ${reps} reps` : '';
+    return `${next.exercise_name} · set ${next.set_index + 1}${target}`;
   }
 
   async function stopRest() {
@@ -196,7 +225,7 @@ export default function WorkoutScreen() {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       // Sets from a workout plan carry their own rest time; 0 means no timer.
       const rest = set.rest_seconds ?? restSeconds;
-      if (rest > 0) startRest(secondsFromNow(rest));
+      if (rest > 0) startRest(secondsFromNow(rest), nextSetLabel(set));
     }
   }
 

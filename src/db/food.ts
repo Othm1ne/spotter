@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { scale, type FoodInput, type Meal, type Nutrients } from '@/lib/food';
+import type { DayIntake, TopFood } from '@/lib/nutrition-review';
 
 export type Food = Nutrients & {
   id: number;
@@ -198,4 +199,33 @@ export function dailyTotals(db: SQLiteDatabase, sinceDay: string) {
      WHERE day >= ? GROUP BY day ORDER BY day`,
     sinceDay
   );
+}
+
+/** Calories, macros and number of entries per day since `fromDay`. */
+export function intakeByDay(db: SQLiteDatabase, fromDay: string) {
+  return db.getAllAsync<DayIntake>(
+    `SELECT day, SUM(kcal) AS kcal, SUM(protein) AS protein, SUM(carbs) AS carbs, SUM(fat) AS fat, COUNT(*) AS entries
+     FROM food_entries WHERE day >= ? GROUP BY day ORDER BY day`,
+    fromDay
+  );
+}
+
+/** The foods that gave the most calories since `fromDay`. */
+export function topFoods(db: SQLiteDatabase, fromDay: string, limit = 8) {
+  return db.getAllAsync<TopFood>(
+    `SELECT name, SUM(kcal) AS kcal, SUM(protein) AS protein, COUNT(*) AS times
+     FROM food_entries WHERE day >= ? GROUP BY LOWER(name) ORDER BY SUM(kcal) DESC LIMIT ?`,
+    fromDay,
+    limit
+  );
+}
+
+export async function waterSince(db: SQLiteDatabase, fromDay: string) {
+  const rows = await db.getAllAsync<{ ml: number }>('SELECT ml FROM water WHERE day >= ?', fromDay);
+  return rows.map((r) => r.ml);
+}
+
+export async function foodNamesSince(db: SQLiteDatabase, fromDay: string) {
+  const rows = await db.getAllAsync<{ name: string }>('SELECT DISTINCT name FROM food_entries WHERE day >= ?', fromDay);
+  return rows.map((r) => r.name);
 }

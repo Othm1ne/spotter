@@ -10,7 +10,10 @@ type Best = { name: string; best_weight: number; best_weight_reps: number; best_
 
 type FoodItem = { name: string; meal: string; kcal: number; protein: number; carbs: number; fat: number };
 
+type ProgramInfo = { name: string; weeks: number; startedAt: number; days: string[]; next: string | null };
+
 export type CoachInput = {
+  program?: ProgramInfo | null;
   todayFood: FoodItem[];
   lastWeekFood: { day: string; kcal: number; protein: number }[];
   profile: Profile | null;
@@ -65,7 +68,22 @@ function daysAgo(time: number, now: Date): string {
   return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
 }
 
+function programSection(program: ProgramInfo, now: Date): string {
+  const week = Math.min(program.weeks, Math.floor((now.getTime() - program.startedAt) / (7 * 86_400_000)) + 1);
+  return `Current program: ${program.name}, week ${week} of ${program.weeks}. Next workout: ${program.next ?? '?'}.
+Program days:
+${program.days.map((d) => `- ${d}`).join('\n')}
+Workouts started from the program suggest weights by double progression (add weight when every set hits the top of the rep range).`;
+}
+
 function trainingSection(input: CoachInput, now: Date): string {
+  const program = input.program
+    ? `${programSection(input.program, now)}\n`
+    : 'No training program yet (they can build one from Home).\n';
+  return program + workoutsSection(input, now);
+}
+
+function workoutsSection(input: CoachInput, now: Date): string {
   if (input.recent.length === 0) return 'No workouts logged yet.';
   const recent = input.recent
     .map((w) => {

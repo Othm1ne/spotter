@@ -4,16 +4,16 @@ import { Pressable, Text } from 'react-native';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 
+import { NotificationsBridge } from '@/components/notifications-bridge';
 import { Colors } from '@/constants/theme';
 import { DATABASE_NAME, migrate } from '@/db/schema';
 
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-  }),
+  handleNotification: async (notification) => {
+    // Rest notices are for the lock screen: in the app, the on-screen timer already shows them.
+    const rest = String(notification.request.identifier).startsWith('rest-');
+    return { shouldShowBanner: !rest, shouldShowList: true, shouldPlaySound: !rest, shouldSetBadge: false };
+  },
 });
 
 const theme = {
@@ -33,6 +33,7 @@ export default function RootLayout() {
     <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
       <ThemeProvider value={theme}>
         <StatusBar style="light" />
+        <NotificationsBridge />
         <Stack
           screenOptions={{
             headerTintColor: Colors.accent,
@@ -87,9 +88,22 @@ export default function RootLayout() {
           />
           <Stack.Screen name="food/[id]" options={{ presentation: 'modal', title: 'Add food' }} />
           <Stack.Screen
+            name="nutrition-review"
+            options={{ presentation: 'modal', title: 'Coach review', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen
+            name="supplements"
+            options={{ presentation: 'modal', title: 'Supplements', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen
+            name="supplement/[id]"
+            options={{ presentation: 'modal', title: '', headerRight: () => <HeaderButton label="Done" /> }}
+          />
+          <Stack.Screen
             name="program"
             options={{ presentation: 'modal', title: 'Program', headerRight: () => <HeaderButton label="Done" /> }}
           />
+          <Stack.Screen name="history/index" options={{ title: 'History' }} />
           <Stack.Screen name="history/[id]" options={{ title: 'Workout' }} />
         </Stack>
       </ThemeProvider>

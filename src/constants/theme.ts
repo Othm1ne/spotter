@@ -17,6 +17,9 @@ export const Colors = {
 /** Macro colors, validated as a categorical set on the dark surface. Always shown with a text label. */
 export const Macros = { protein: '#3D9BE0', carbs: '#D07A1A', fat: '#E0559A' } as const;
 
+/** Supplement evidence tiers: worth it, sometimes useful, skip. Always shown with the tier name. */
+export const TierColors = { strong: Colors.success, situational: Colors.warning, skip: Colors.textSecondary } as const;
+
 /** Hero gradient for premium cards, lime to green. */
 export const HeroGradient = ['#C6F432', '#5BD17A'] as const;
 

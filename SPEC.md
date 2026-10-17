@@ -38,8 +38,8 @@ A premium-feeling fitness app for me and my friends: log training fast, follow a
 4. **Meal tracking** ✅: Nutrition tab with daily calories/macros vs targets; add food by Open Food Facts search, barcode scan, AI text description; water; favorites, recents and "your usual" per meal; copy yesterday's meal. Photo logging waits for a free vision model.
 2. **AI coach** ✅: Cloudflare Worker proxy; Coach tab chat that knows your profile, training and meals; guardrails (no medical advice, no unhealthy dieting).
 3. **AI program** ✅: AI builds a multi-week program from your profile, picking from an equipment-filtered, injury-aware exercise list (offline template fallback); days saved as workout plans; next workout on Home; double progression with suggested weights, first-time and plateau (deload) hints.
-5. **Nutrition & supplements**: AI daily/weekly nutrition review; hand-written evidence-based supplement guide (creatine, whey, caffeine, vitamin D, omega-3…) with coach follow-ups.
-6. **Daily dashboard**: Home shows today's workout, calories left, streak and a coach tip; tabs Home · Train · Nutrition · Coach · Profile.
+5. **Nutrition & supplements** ✅: Coach review (today / last 7 days) with stats, calorie chart and AI wins/fixes/food ideas, cached until the log changes; weekly insight line on the Nutrition tab; hand-written supplement guide by evidence tier with personal "for you" reasons and doses; "Ask the coach" follow-ups open a new chat. The coach also knows the current program.
+6. **Daily dashboard** ✅: tabs Home · Train · Nutrition · Coach · Profile. Home: greeting and weigh-in, today's program workout, calories ring with protein/water (+1 glass) and Log food, a rule-based coach tip (refuel, protein catch-up, water, weigh-in, lapsed training…) that opens a coach chat, streak/week/weight tiles and a Mon–Sun strip. Train: workout in progress, program, my workouts, activity calendar, recent workouts and full history.
 
 ## Later
 - Custom exercises, set types (warm-up, drop, failure), RPE, supersets, plate calculator, kg/lb setting, progress photos, export/backup.

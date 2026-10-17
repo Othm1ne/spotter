@@ -1,242 +1,277 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
-import { ActivityCalendar, ActivityLegend } from '@/components/activity-calendar';
+import type { IconName } from '@/components/icon';
 import { SetupCard } from '@/components/plan-cards';
 import { ProgramCard } from '@/components/program-card';
-import { Button, Card, Screen, SectionTitle, StatTile } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
-import { listEntries } from '@/db/food';
+import { ProgressRing } from '@/components/progress-ring';
+import { Button, Card, Screen } from '@/components/ui';
+import { Colors, Macros, Radius, Spacing } from '@/constants/theme';
+import { addWater, getWater, listEntries } from '@/db/food';
 import { getProgram, type Program } from '@/db/program';
-import { listRoutines, type RoutineSummary } from '@/db/routines';
-import { getActiveWorkout, listFinishedWorkouts, startWorkout, type Workout, type WorkoutSummary } from '@/db/workouts';
-import { useNow } from '@/hooks/use-now';
+import { getActiveWorkout, type Workout } from '@/db/workouts';
+import { useAskCoach } from '@/hooks/use-ask-coach';
 import { useBody } from '@/hooks/use-body';
+import { useNow } from '@/hooks/use-now';
 import { useStartRoutine } from '@/hooks/use-start-routine';
 import { useStats } from '@/hooks/use-stats';
-import { sum, ZERO, type Nutrients } from '@/lib/food';
-import { dayKey, parseDayKey, startOfDay, weeklyCounts } from '@/lib/stats';
-import { formatDuration, formatElapsed, formatVolume, isStaleWorkout } from '@/lib/workout-math';
+import { mealForTime, sum, ZERO, type Nutrients } from '@/lib/food';
+import { addDays, dayKey, startOfWeek } from '@/lib/stats';
+import { dayOfYear, pickTip } from '@/lib/tips';
+import { formatDuration, formatElapsed, formatWeight, isStaleWorkout } from '@/lib/workout-math';
 
+const GLASS_ML = 250;
+
+/** Daily dashboard: today's workout, food and water, a coach tip and the week at a glance. */
 export default function HomeTab() {
   const db = useSQLiteContext();
   const stats = useStats();
   const body = useBody();
+  const startRoutine = useStartRoutine();
+  const askCoach = useAskCoach();
   const [active, setActive] = useState<Workout | null>(null);
-  const [last, setLast] = useState<WorkoutSummary | null>(null);
-  const [routines, setRoutines] = useState<RoutineSummary[]>([]);
   const [program, setProgram] = useState<Program | null>(null);
   const [eaten, setEaten] = useState<Nutrients>(ZERO);
-  const [selected, setSelected] = useState(() => dayKey(new Date()));
-  const now = useNow(active !== null);
+  const [foods, setFoods] = useState(0);
+  const [water, setWater] = useState(0);
+  const now = useNow(true, active ? 1000 : 60_000);
+
+  const load = useCallback(async () => {
+    const today = dayKey(new Date());
+    const [a, p, entries, w] = await Promise.all([getActiveWorkout(db), getProgram(db), listEntries(db, today), getWater(db, today)]);
+    setActive(a);
+    setProgram(p);
+    setEaten(sum(entries));
+    setFoods(entries.length);
+    setWater(w);
+  }, [db]);
 
   useFocusEffect(
     useCallback(() => {
-      (async () => {
-        setActive(await getActiveWorkout(db));
-        setLast((await listFinishedWorkouts(db, 1))[0] ?? null);
-        setRoutines(await listRoutines(db));
-        setProgram(await getProgram(db));
-        setEaten(sum(await listEntries(db, dayKey(new Date()))));
-      })();
-    }, [db])
+      load();
+    }, [load])
   );
 
-  async function onStart() {
-    await startWorkout(db);
-    router.push('/workout');
+  async function drink() {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    await addWater(db, dayKey(new Date()), GLASS_ML);
+    setWater(await getWater(db, dayKey(new Date())));
   }
 
-  const startRoutine = useStartRoutine();
-  const onStartRoutine = (routine: RoutineSummary) => startRoutine(routine.id);
 
-  const thisWeek = weeklyCounts(stats.workouts, 1, new Date())[0].count;
-  const yearCount = stats.workouts.filter((w) => w.started_at > now - 365 * 24 * 3600 * 1000).length;
-  const day = stats.days.get(selected);
-  const isToday = selected === dayKey(new Date());
+  const date = new Date(now);
+  const todayKey = dayKey(date);
+  const { profile, targets } = body;
+  const trainedToday = stats.days.has(todayKey);
+  const lastWorkout = stats.workouts.reduce((m, w) => Math.max(m, w.started_at), 0);
+  const daysSinceWorkout = lastWorkout ? Math.floor((date.getTime() - lastWorkout) / 86_400_000) : null;
+  const weekStart = dayKey(startOfWeek(date));
+  const thisWeek = stats.workouts.filter((w) => dayKey(w.started_at) >= weekStart).length;
+  const kcalLeft = targets ? targets.calories - eaten.kcal : null;
+  const proteinLeft = targets ? targets.protein - eaten.protein : null;
+
+  const tip = pickTip({
+    hour: date.getHours(),
+    dayOfYear: dayOfYear(date),
+    hasProfile: profile !== null,
+    kcalLeft,
+    proteinLeft,
+    waterMl: water,
+    waterTarget: targets?.waterMl ?? null,
+    foodsToday: foods,
+    trainedToday,
+    daysSinceWorkout,
+    nextWorkout: program?.days[program.next]?.name ?? null,
+    weighedToday: body.loggedToday,
+    streak: stats.dayStreak.current,
+  });
+
+  const weight = body.average ?? body.latest?.weight ?? null;
 
   return (
     <Screen title="Spotter" right={<StreakPill days={stats.dayStreak.current} />}>
       <ScrollView contentContainerStyle={styles.content}>
-        {body.loaded && !body.profile && <SetupCard />}
-        {body.profile && body.targets && (
-          <View style={styles.today}>
-            <Pressable onPress={() => router.push('/nutrition')} style={({ pressed }) => [styles.todayTargets, pressed && { opacity: 0.7 }]}>
-              <Text style={styles.todayLabel}>{greeting(now, body.profile.name)}</Text>
-              <Text style={styles.todayValue}>
-                {Math.max(0, Math.round(body.targets.calories - eaten.kcal)).toLocaleString()} kcal left ·{' '}
-                {Math.max(0, Math.round(body.targets.protein - eaten.protein))} g protein to go
-              </Text>
-            </Pressable>
-            {!body.loggedToday && (
-              <Pressable onPress={() => router.push('/weight')} style={styles.weighIn}>
-                <Ionicons name="scale-outline" size={18} color={Colors.accentText} />
-                <Text style={styles.weighInText}>Weigh in</Text>
-              </Pressable>
-            )}
+        <View style={styles.greetingRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.greeting}>{greeting(date, profile?.name ?? '')}</Text>
+            <Text style={styles.muted}>{date.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}</Text>
           </View>
-        )}
-        {active ? (
-          <Card style={styles.activeCard}>
-            <Text style={styles.label}>IN PROGRESS</Text>
-            <Text style={styles.cardTitle}>{active.name}</Text>
-            {isStaleWorkout(active.started_at, now) ? (
-              <Text style={styles.stale}>
-                Open for {formatElapsed(now - active.started_at)}. Forgot to finish? Resume it and tap Finish, and
-                Spotter will end it at your last set.
-              </Text>
-            ) : (
-              <Text style={styles.timer}>{formatDuration((now - active.started_at) / 1000)}</Text>
-            )}
-            <Button label="Resume workout" onPress={() => router.push('/workout')} />
-          </Card>
-        ) : null}
-
-        {body.profile && !active && <ProgramCard program={program} now={now} onStart={startRoutine} />}
-
-        <SectionTitle
-          title="My workouts"
-          right={
-            <Pressable
-              onPress={() => router.push({ pathname: '/routine/[id]', params: { id: 'new' } })}
-              hitSlop={8}
-              style={styles.newButton}>
-              <Ionicons name="add" size={18} color={Colors.accentText} />
-              <Text style={styles.newLabel}>New</Text>
+          {profile && !body.loggedToday && (
+            <Pressable onPress={() => router.push('/weight')} style={styles.weighIn}>
+              <Ionicons name="scale-outline" size={18} color={Colors.accentText} />
+              <Text style={styles.weighInText}>Weigh in</Text>
             </Pressable>
-          }
-        />
-        {routines.length === 0 ? (
-          <Pressable onPress={() => router.push({ pathname: '/routine/[id]', params: { id: 'new' } })}>
-            <Card style={styles.emptyPlan}>
-              <Ionicons name="clipboard-outline" size={28} color={Colors.accent} />
-              <Text style={styles.cardTitle}>Plan your first workout</Text>
-              <Text style={[styles.muted, { textAlign: 'center' }]}>
-                Build a chest day, leg day or anything else: pick the exercises, sets, reps and rest once, then
-                start it in one tap.
-              </Text>
-            </Card>
-          </Pressable>
-        ) : (
-          routines.map((r) => (
-            <Pressable
-              key={r.id}
-              onPress={() => router.push({ pathname: '/routine/[id]', params: { id: String(r.id) } })}
-              style={({ pressed }) => pressed && { opacity: 0.8 }}>
-              <Card style={styles.routine}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>
-                    {r.name}
-                  </Text>
-                  <Text style={styles.muted}>
-                    {r.exercise_count} exercise{r.exercise_count === 1 ? '' : 's'} · {r.set_count} sets
-                    {r.last_done ? ` · ${daysAgo(r.last_done, now)}` : ''}
-                  </Text>
-                  <Text style={styles.muted} numberOfLines={1}>
-                    {r.exercises}
-                  </Text>
-                </View>
-                <Pressable
-                  onPress={() => onStartRoutine(r)}
-                  hitSlop={6}
-                  style={styles.play}
-                  accessibilityLabel={`Start ${r.name}`}>
-                  <Ionicons name="play" size={22} color={Colors.accentText} />
-                </Pressable>
-              </Card>
-            </Pressable>
-          ))
-        )}
-        {!active && <Button label="Start empty workout" variant="secondary" onPress={onStart} />}
-
-        <View style={styles.stats}>
-          <StatTile label="Streak" value={`${stats.dayStreak.current} ${stats.dayStreak.current === 1 ? 'day' : 'days'}`} />
-          <StatTile label="This week" value={`${thisWeek}/${stats.goal}`} />
-          <StatTile label="Goal streak" value={`${stats.weekStreak.current} wk`} />
+          )}
         </View>
 
-        <Card style={styles.calendarCard}>
-          <View style={styles.calendarHeader}>
-            <Text style={styles.cardTitle}>Activity</Text>
-            <Text style={styles.muted}>
-              {yearCount} workout{yearCount === 1 ? '' : 's'} in the last year
-            </Text>
-          </View>
-          <ActivityCalendar days={stats.days} selected={selected} onSelect={setSelected} />
-          <ActivityLegend />
+        {body.loaded && !profile && <SetupCard />}
 
-          <View style={styles.dayPanel}>
-            <Text style={styles.dayTitle}>
-              {isToday
-                ? 'Today'
-                : parseDayKey(selected).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long' })}
-            </Text>
-            {day ? (
-              day.workouts.map((w) => (
-                <Pressable
-                  key={w.id}
-                  onPress={() => router.push({ pathname: '/history/[id]', params: { id: String(w.id) } })}
-                  style={({ pressed }) => [styles.dayRow, pressed && { opacity: 0.6 }]}>
-                  <Text style={styles.dayRowName} numberOfLines={1}>
-                    {w.name}
-                  </Text>
-                  <Text style={styles.muted}>
-                    {w.sets} sets · {formatVolume(w.volume)}
-                  </Text>
-                  <Ionicons name="chevron-forward" size={16} color={Colors.textSecondary} />
-                </Pressable>
-              ))
-            ) : (
-              <Text style={styles.muted}>{isToday ? 'No workout yet today.' : 'Rest day.'}</Text>
-            )}
-            <Button
-              label={isToday ? '+ Log a completed workout' : '+ Log a workout on this day'}
-              variant="secondary"
-              onPress={() => router.push({ pathname: '/log-workout', params: { date: selected } })}
-            />
-          </View>
-        </Card>
+        {active && (
+          <Pressable onPress={() => router.push('/workout')}>
+            <Card style={styles.activeCard}>
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={styles.label}>IN PROGRESS</Text>
+                <Text style={styles.cardTitle}>{active.name}</Text>
+                {isStaleWorkout(active.started_at, now) ? (
+                  <Text style={styles.stale}>Open for {formatElapsed(now - active.started_at)}. Forgot to finish?</Text>
+                ) : (
+                  <Text style={styles.timer}>{formatDuration((now - active.started_at) / 1000)}</Text>
+                )}
+              </View>
+              <View style={styles.play}>
+                <Ionicons name="arrow-forward" size={24} color={Colors.accentText} />
+              </View>
+            </Card>
+          </Pressable>
+        )}
 
-        {last && (
-          <>
-            <Text style={styles.section}>Last workout</Text>
-            <Pressable onPress={() => router.push({ pathname: '/history/[id]', params: { id: String(last.id) } })}>
-              <Card>
-                <Text style={styles.cardTitle}>{last.name}</Text>
-                <Text style={styles.muted}>
-                  {new Date(last.started_at).toLocaleDateString(undefined, {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'short',
-                  })}{' '}
-                  · {last.set_count} sets · {formatVolume(last.volume)}
-                </Text>
-                <Text style={styles.muted} numberOfLines={2}>
-                  {last.exercises}
-                </Text>
+        {profile && !active && <ProgramCard program={program} now={now} onStart={startRoutine} />}
+
+        {targets && kcalLeft !== null && (
+          <Animated.View entering={FadeInDown.delay(50)}>
+            <Pressable onPress={() => router.navigate('/nutrition')} style={({ pressed }) => pressed && { opacity: 0.9 }}>
+              <Card style={styles.food}>
+                <ProgressRing
+                  size={104}
+                  stroke={10}
+                  progress={eaten.kcal / targets.calories}
+                  color={kcalLeft < 0 ? Colors.warning : Colors.accent}>
+                  <Text style={styles.ringValue}>{Math.abs(Math.round(kcalLeft)).toLocaleString()}</Text>
+                  <Text style={styles.ringLabel}>{kcalLeft < 0 ? 'kcal over' : 'kcal left'}</Text>
+                </ProgressRing>
+                <View style={styles.bars}>
+                  <Bar
+                    label="Protein"
+                    value={`${Math.round(eaten.protein)} / ${targets.protein} g`}
+                    progress={eaten.protein / targets.protein}
+                    color={Macros.protein}
+                  />
+                  <View style={styles.waterRow}>
+                    <View style={{ flex: 1 }}>
+                      <Bar
+                        label="Water"
+                        value={`${(water / 1000).toFixed(1)} / ${(targets.waterMl / 1000).toFixed(1)} L`}
+                        progress={water / targets.waterMl}
+                        color={Macros.protein}
+                      />
+                    </View>
+                    <Pressable onPress={drink} hitSlop={8} style={styles.drink} accessibilityLabel="Add a glass of water">
+                      <Ionicons name="add" size={18} color={Colors.text} />
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    onPress={() => router.push({ pathname: '/food/add', params: { day: todayKey, meal: mealForTime(date) } })}
+                    hitSlop={6}
+                    style={styles.addFood}>
+                    <Ionicons name="add" size={18} color={Colors.accent} />
+                    <Text style={styles.addFoodText}>Log food</Text>
+                  </Pressable>
+                </View>
               </Card>
             </Pressable>
-          </>
+          </Animated.View>
         )}
+
+        <Animated.View entering={FadeInDown.delay(100)}>
+          <Pressable onPress={() => askCoach(tip.question)} style={({ pressed }) => pressed && { opacity: 0.85 }}>
+            <Card style={styles.tip}>
+              <View style={styles.tipIcon}>
+                <Ionicons name={tip.icon as IconName} size={20} color={Colors.accent} />
+              </View>
+              <View style={{ flex: 1, gap: 4 }}>
+                <Text style={styles.tipLabel}>COACH TIP</Text>
+                <Text style={styles.tipTitle}>{tip.title}</Text>
+                <Text style={styles.tipBody}>{tip.body}</Text>
+                <Text style={styles.tipAsk}>Ask the coach ›</Text>
+              </View>
+            </Card>
+          </Pressable>
+        </Animated.View>
+
+        <View style={styles.tiles}>
+          <Tile icon="flame" value={`${stats.dayStreak.current}`} label="day streak" />
+          <Tile icon="calendar" value={`${thisWeek}/${stats.goal}`} label="this week" onPress={() => router.navigate('/train')} />
+          <Tile
+            icon="scale"
+            value={weight !== null ? formatWeight(Math.round(weight * 10) / 10) : '–'}
+            label={body.rate ? `kg · ${body.rate.kgPerWeek > 0 ? '+' : ''}${body.rate.kgPerWeek.toFixed(1)}/wk` : 'kg'}
+            onPress={() => router.push('/weight')}
+          />
+        </View>
+
+        <WeekStrip trained={stats.days} today={date} />
+
+        {body.loaded && !profile && <Button label="Start a workout" variant="secondary" onPress={() => router.navigate('/train')} />}
       </ScrollView>
     </Screen>
   );
 }
 
-function greeting(now: number, name: string) {
-  const h = new Date(now).getHours();
+function greeting(date: Date, name: string) {
+  const h = date.getHours();
   const part = h < 5 ? 'Late night' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   return name ? `${part}, ${name}` : part;
 }
 
-function daysAgo(time: number, now: number) {
-  const days = Math.floor((startOfDay(now).getTime() - startOfDay(time).getTime()) / (24 * 3600 * 1000));
-  if (days <= 0) return 'done today';
-  if (days === 1) return 'done yesterday';
-  return `done ${days} days ago`;
+function Bar({ label, value, progress, color }: { label: string; value: string; progress: number; color: string }) {
+  return (
+    <View style={{ gap: 4 }}>
+      <View style={styles.barText}>
+        <Text style={styles.barLabel}>{label}</Text>
+        <Text style={styles.barValue}>{value}</Text>
+      </View>
+      <View style={styles.track}>
+        <View style={[styles.fill, { width: `${Math.min(100, Math.max(0, progress) * 100)}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+function Tile({ icon, value, label, onPress }: { icon: IconName; value: string; label: string; onPress?: () => void }) {
+  return (
+    <Pressable onPress={onPress} disabled={!onPress} style={({ pressed }) => [styles.tile, pressed && { opacity: 0.8 }]}>
+      <Ionicons name={icon} size={16} color={Colors.textSecondary} />
+      <Text style={styles.tileValue} numberOfLines={1} adjustsFontSizeToFit>
+        {value}
+      </Text>
+      <Text style={styles.tileLabel} numberOfLines={1}>
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+/** Monday to Sunday of this week: ticked days had a workout. */
+function WeekStrip({ trained, today }: { trained: Map<string, unknown>; today: Date }) {
+  const monday = startOfWeek(today);
+  const todayKey = dayKey(today);
+  return (
+    <Pressable onPress={() => router.navigate('/train')}>
+      <Card style={styles.week}>
+        {Array.from({ length: 7 }, (_, i) => {
+          const d = addDays(monday, i);
+          const key = dayKey(d);
+          const done = trained.has(key);
+          const isToday = key === todayKey;
+          return (
+            <View key={key} style={styles.weekDay}>
+              <Text style={[styles.weekLabel, isToday && { color: Colors.text }]}>
+                {d.toLocaleDateString(undefined, { weekday: 'narrow' })}
+              </Text>
+              <View style={[styles.weekDot, done && styles.weekDone, isToday && !done && styles.weekToday]}>
+                {done && <Ionicons name="checkmark" size={16} color={Colors.accentText} />}
+              </View>
+            </View>
+          );
+        })}
+      </Card>
+    </Pressable>
+  );
 }
 
 function StreakPill({ days }: { days: number }) {
@@ -251,36 +286,9 @@ function StreakPill({ days }: { days: number }) {
 
 const styles = StyleSheet.create({
   content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
-  activeCard: { borderWidth: 1, borderColor: Colors.accent },
-  label: { color: Colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
-  cardTitle: { color: Colors.text, fontSize: 18, fontWeight: '700' },
-  stale: { color: '#FFB547', fontSize: 14, lineHeight: 20 },
-  timer: { color: Colors.text, fontSize: 28, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  section: { color: Colors.text, fontSize: 20, fontWeight: '800', marginTop: Spacing.sm },
-  stats: { flexDirection: 'row', gap: Spacing.sm },
+  greetingRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  greeting: { color: Colors.text, fontSize: 20, fontWeight: '800' },
   muted: { color: Colors.textSecondary, fontSize: 14 },
-  calendarCard: { gap: Spacing.md },
-  calendarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  dayPanel: {
-    gap: Spacing.sm,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing.md,
-  },
-  dayTitle: { color: Colors.text, fontSize: 16, fontWeight: '700' },
-  dayRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    backgroundColor: Colors.surfaceRaised,
-    borderRadius: Radius.sm,
-    padding: Spacing.md,
-  },
-  dayRowName: { color: Colors.text, fontSize: 15, fontWeight: '600', flex: 1 },
-  today: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  todayTargets: { flex: 1, gap: 2 },
-  todayLabel: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  todayValue: { color: Colors.text, fontSize: 17, fontWeight: '800' },
   weighIn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -291,18 +299,11 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   weighInText: { color: Colors.accentText, fontWeight: '800' },
-  newButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: Colors.accent,
-    borderRadius: Radius.pill,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-  },
-  newLabel: { color: Colors.accentText, fontWeight: '800' },
-  emptyPlan: { alignItems: 'center', gap: Spacing.sm, borderWidth: 1, borderColor: Colors.border, borderStyle: 'dashed' },
-  routine: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  activeCard: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md, borderWidth: 1, borderColor: Colors.accent },
+  label: { color: Colors.accent, fontSize: 12, fontWeight: '800', letterSpacing: 1 },
+  cardTitle: { color: Colors.text, fontSize: 18, fontWeight: '700' },
+  stale: { color: Colors.warning, fontSize: 14 },
+  timer: { color: Colors.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'] },
   play: {
     width: 52,
     height: 52,
@@ -311,6 +312,66 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  food: { flexDirection: 'row', alignItems: 'center', gap: Spacing.lg },
+  ringValue: { color: Colors.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  ringLabel: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600' },
+  bars: { flex: 1, gap: Spacing.md },
+  barText: { flexDirection: 'row', justifyContent: 'space-between' },
+  barLabel: { color: Colors.text, fontSize: 13, fontWeight: '700' },
+  barValue: { color: Colors.textSecondary, fontSize: 12, fontVariant: ['tabular-nums'] },
+  track: { height: 6, borderRadius: 3, backgroundColor: Colors.surfaceRaised, overflow: 'hidden' },
+  fill: { height: 6, borderRadius: 3 },
+  waterRow: { flexDirection: 'row', alignItems: 'flex-end', gap: Spacing.sm },
+  drink: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addFood: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+    borderRadius: Radius.pill,
+    borderWidth: 1,
+    borderColor: Colors.accent,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  addFoodText: { color: Colors.accent, fontWeight: '700', fontSize: 14 },
+  tip: { flexDirection: 'row', gap: Spacing.md, alignItems: 'flex-start' },
+  tipIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tipLabel: { color: Colors.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  tipTitle: { color: Colors.text, fontSize: 17, fontWeight: '800' },
+  tipBody: { color: Colors.text, fontSize: 14, lineHeight: 20, opacity: 0.85 },
+  tipAsk: { color: Colors.accent, fontSize: 13, fontWeight: '700', marginTop: 2 },
+  tiles: { flexDirection: 'row', gap: Spacing.sm },
+  tile: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, gap: 2 },
+  tileValue: { color: Colors.text, fontSize: 22, fontWeight: '800', fontVariant: ['tabular-nums'], marginTop: 4 },
+  tileLabel: { color: Colors.textSecondary, fontSize: 12 },
+  week: { flexDirection: 'row', justifyContent: 'space-between' },
+  weekDay: { alignItems: 'center', gap: 6 },
+  weekLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  weekDot: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceRaised,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  weekDone: { backgroundColor: Colors.accent },
+  weekToday: { borderWidth: 2, borderColor: Colors.accent },
   pill: {
     flexDirection: 'row',
     alignItems: 'center',

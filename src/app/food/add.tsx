@@ -575,5 +575,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
   },
-  toastText: { color: Colors.accentText, fontWeight: '800' },
+  toastText: { color: Colors.accentText, fontWeight: '800', flexShrink: 1 },
 });

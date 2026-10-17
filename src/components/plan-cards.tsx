@@ -97,7 +97,7 @@ export function PlanCard({ body }: { body: Body }) {
       ) : (
         <View style={styles.checkIn}>
           <Ionicons name="time-outline" size={20} color={Colors.textSecondary} />
-          <Text style={[styles.checkInText, { color: Colors.textSecondary }]}>
+          <Text style={[styles.checkInText, { flex: 1, color: Colors.textSecondary }]}>
             Weigh in for 2 weeks ({Math.min(weighIns, MIN_WEIGH_INS)}/{MIN_WEIGH_INS} weigh-ins so far) and Spotter will
             check your progress and fine-tune your calories.
           </Text>

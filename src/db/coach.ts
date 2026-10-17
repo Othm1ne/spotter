@@ -4,6 +4,7 @@ import { addDays, dayKey } from '@/lib/stats';
 
 import { listWeights } from './body';
 import { dailyTotals, listEntries } from './food';
+import { getProgram } from './program';
 import { getProfile } from './profile';
 import { getSetting, getWeeklyGoal, setSetting } from './settings';
 import { getExerciseBests, listFinishedWorkouts } from './workouts';
@@ -103,14 +104,27 @@ export function setActiveConversation(db: SQLiteDatabase, id: number | null) {
   return setSetting(db, 'coach_conversation', id === null ? '0' : String(id));
 }
 
+/** A question asked from another screen (e.g. the supplement guide), sent in a new chat when the Coach tab opens. */
+export function askCoachLater(db: SQLiteDatabase, question: string) {
+  return setSetting(db, 'coach_pending', question);
+}
+
+/** Returns the pending question once, then clears it. */
+export async function takePendingQuestion(db: SQLiteDatabase) {
+  const question = await getSetting(db, 'coach_pending');
+  if (question) await setSetting(db, 'coach_pending', '');
+  return question || null;
+}
+
 /** Everything the coach should know about the user, gathered for the system prompt. */
 export async function gatherCoachData(db: SQLiteDatabase) {
-  const [profile, weights, goal, recent, bests] = await Promise.all([
+  const [profile, weights, goal, recent, bests, program] = await Promise.all([
     getProfile(db),
     listWeights(db),
     getWeeklyGoal(db),
     listFinishedWorkouts(db, 8),
     getExerciseBests(db),
+    getProgram(db),
   ]);
   const topSets = await getTopSets(db, recent.map((w) => w.id));
   const today = dayKey(new Date());
@@ -124,6 +138,15 @@ export async function gatherCoachData(db: SQLiteDatabase) {
     weeklyGoal: goal,
     recent: recent.map((w) => ({ ...w, top: topSets.get(w.id) ?? [] })),
     bests: bests.slice(0, 12),
+    program: program
+      ? {
+          name: program.name,
+          weeks: program.weeks,
+          startedAt: program.started_at,
+          days: program.days.map((d) => `${d.name}: ${d.exercises ?? ''}`),
+          next: program.days[program.next]?.name ?? null,
+        }
+      : null,
     todayFood: todayEntries.map((e) => ({ name: e.name, meal: e.meal, kcal: e.kcal, protein: e.protein, carbs: e.carbs, fat: e.fat })),
     // Past days only: today is still in progress.
     lastWeekFood: lastWeek.filter((d) => d.day !== today),

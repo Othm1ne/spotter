@@ -2,9 +2,9 @@ import type { SQLiteDatabase } from 'expo-sqlite';
 
 import { suggestNext, weightIncrement } from '@/lib/program';
 
+import { DEFAULT_REST_SECONDS } from './settings';
 import { getExerciseHistory, getPreviousSets, type Exercise } from './workouts';
 
-export const DEFAULT_REST_SECONDS = 90;
 
 export type RoutineSummary = {
   id: number;

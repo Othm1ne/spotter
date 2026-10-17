@@ -3,7 +3,7 @@ import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FlatList,
   KeyboardAvoidingView,
@@ -28,6 +28,7 @@ import {
   getActiveConversation,
   listCoachMessages,
   setActiveConversation,
+  takePendingQuestion,
   type CoachData,
   type CoachMessage,
 } from '@/db/coach';
@@ -48,9 +49,25 @@ export default function CoachTab() {
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The focus callback runs once per focus; the ref gives it the latest send.
+  const sendRef = useRef<typeof send>(null!);
+  useEffect(() => {
+    sendRef.current = send;
+  });
+
   useFocusEffect(
     useCallback(() => {
       (async () => {
+        // Another screen may have asked a question: answer it in a new chat.
+        const pending = await takePendingQuestion(db);
+        if (pending) {
+          await setActiveConversation(db, null);
+          setConversationId(null);
+          setMessages([]);
+          setError(null);
+          sendRef.current(pending, { conversationId: null, messages: [] });
+          return;
+        }
         // The history screen may have picked another conversation.
         const id = await getActiveConversation(db);
         setConversationId(id);
@@ -61,14 +78,15 @@ export default function CoachTab() {
     }, [db])
   );
 
-  async function send(text: string) {
+  /** `base` overrides the current chat, for a question sent before state has caught up. */
+  async function send(text: string, base = { conversationId, messages }) {
     const content = text.trim();
     if (!content || sending) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setInput('');
     setError(null);
     setSending(true);
-    let conversation = conversationId;
+    let conversation = base.conversationId;
     if (conversation === null) {
       conversation = await createConversation(db, content);
       await setActiveConversation(db, conversation);
@@ -76,7 +94,7 @@ export default function CoachTab() {
     }
     const id = await addCoachMessage(db, conversation, 'user', content);
     const history = [
-      ...messages,
+      ...base.messages,
       { id, conversation_id: conversation, role: 'user' as const, content, created_at: timestamp() },
     ];
     setMessages(history);

@@ -12,13 +12,13 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="house.fill" md="home" />
       </NativeTabs.Trigger>
+      <NativeTabs.Trigger name="train">
+        <NativeTabs.Trigger.Label>Train</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="dumbbell.fill" md="fitness_center" />
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="nutrition">
         <NativeTabs.Trigger.Label>Nutrition</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="fork.knife" md="restaurant" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="history">
-        <NativeTabs.Trigger.Label>History</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="clock.arrow.circlepath" md="history" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="coach">
         <NativeTabs.Trigger.Label>Coach</NativeTabs.Trigger.Label>

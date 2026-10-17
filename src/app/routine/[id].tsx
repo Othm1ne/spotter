@@ -7,7 +7,8 @@ import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleShee
 import { ExercisePickerModal, SetsEditor, type DraftSet } from '@/components/sets-editor';
 import { Button } from '@/components/ui';
 import { Colors, Spacing } from '@/constants/theme';
-import { DEFAULT_REST_SECONDS, deleteRoutine, getRoutine, saveRoutine } from '@/db/routines';
+import { deleteRoutine, getRoutine, saveRoutine } from '@/db/routines';
+import { getDefaultRest } from '@/db/settings';
 import { getPreviousSets, type Exercise } from '@/db/workouts';
 import { formatWeight, parseNumber } from '@/lib/workout-math';
 
@@ -59,7 +60,8 @@ export default function RoutineEditorScreen() {
     const last = previous.map((s) => ({ weight: toText(s.weight), reps: toText(s.reps) }));
     setLastTime((m) => new Map(m).set(exercise.id, last));
     const sets = last.length > 0 ? last : Array.from({ length: DEFAULT_SETS }, () => ({ weight: '', reps: DEFAULT_REPS }));
-    setBlocks((all) => [...all, { key: Date.now(), exercise, restSeconds: DEFAULT_REST_SECONDS, sets }]);
+    const restSeconds = await getDefaultRest(db);
+    setBlocks((all) => [...all, { key: Date.now(), exercise, restSeconds, sets }]);
   }
 
   function updateBlock(key: number, change: (b: Block) => Block) {

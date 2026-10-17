@@ -8,10 +8,12 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 import { ProgressRing } from '@/components/progress-ring';
 import { Card, Screen } from '@/components/ui';
 import { Colors, Macros, Radius, Spacing } from '@/constants/theme';
-import { addWater, copyMeal, deleteEntry, getWater, listEntries, type FoodEntry } from '@/db/food';
+import { addWater, copyMeal, deleteEntry, getWater, intakeByDay, listEntries, type FoodEntry } from '@/db/food';
 import { useBody } from '@/hooks/use-body';
 import { MEALS, sum, type Meal } from '@/lib/food';
+import { quickInsight, weekStats, type DayIntake } from '@/lib/nutrition-review';
 import { addDays, dayKey, parseDayKey } from '@/lib/stats';
+import { syncReminders } from '@/services/reminders';
 
 const GLASS_ML = 250;
 
@@ -22,13 +24,24 @@ export default function NutritionTab() {
   const [entries, setEntries] = useState<FoodEntry[]>([]);
   const [yesterday, setYesterday] = useState<FoodEntry[]>([]);
   const [water, setWater] = useState(0);
+  const [week, setWeek] = useState<DayIntake[]>([]);
 
   const load = useCallback(async () => {
     const prev = dayKey(addDays(parseDayKey(day), -1));
-    const [e, y, w] = await Promise.all([listEntries(db, day), listEntries(db, prev), getWater(db, day)]);
+    const now = new Date();
+    const [e, y, w, days] = await Promise.all([
+      listEntries(db, day),
+      listEntries(db, prev),
+      getWater(db, day),
+      intakeByDay(db, dayKey(addDays(now, -7))),
+    ]);
     setEntries(e);
     setYesterday(y);
     setWater(w);
+    // The weekly insight covers finished days only.
+    setWeek(days.filter((d) => d.day < dayKey(now)));
+    // A meal just logged or the water goal reached: drop today's reminders for it.
+    syncReminders(db);
   }, [db, day]);
 
   useFocusEffect(
@@ -162,6 +175,27 @@ export default function NutritionTab() {
           </Pressable>
         </Card>
 
+        {targets && (
+          <View style={styles.coachRow}>
+            <Pressable
+              onPress={() => router.push({ pathname: '/nutrition-review', params: { kind: isToday ? 'day' : 'week' } })}
+              style={({ pressed }) => [styles.coachCard, pressed && { opacity: 0.8 }]}>
+              <View style={styles.coachHeader}>
+                <Ionicons name="sparkles" size={16} color={Colors.accent} />
+                <Text style={styles.coachTitle}>Coach review</Text>
+              </View>
+              <Text style={styles.muted} numberOfLines={3}>
+                {quickInsight(weekStats(week, targets, []), targets)}
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => router.push('/supplements')} style={({ pressed }) => [styles.coachCard, styles.suppCard, pressed && { opacity: 0.8 }]}>
+              <Ionicons name="flask" size={22} color={Colors.accent} />
+              <Text style={styles.coachTitle}>Supplements</Text>
+              <Text style={styles.muted}>What works</Text>
+            </Pressable>
+          </View>
+        )}
+
         {MEALS.map((meal) => {
           const items = entries.filter((e) => e.meal === meal.value);
           const total = sum(items);
@@ -258,6 +292,11 @@ const styles = StyleSheet.create({
   },
   dayLabel: { color: Colors.text, fontSize: 15, fontWeight: '700', minWidth: 74, textAlign: 'center' },
   summary: { gap: Spacing.lg },
+  coachRow: { flexDirection: 'row', gap: Spacing.md },
+  coachCard: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md, gap: Spacing.xs },
+  coachHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs },
+  coachTitle: { color: Colors.text, fontSize: 15, fontWeight: '700' },
+  suppCard: { flex: 0, width: 116, alignItems: 'flex-start' },
   summaryTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xl },
   summaryNumbers: { gap: Spacing.md },
   left: { color: Colors.text, fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -0.5 },

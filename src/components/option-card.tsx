@@ -1,11 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import type { ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import type { IconName } from '@/components/icon';
 import { Colors, Radius, Spacing } from '@/constants/theme';
-
-type IconName = ComponentProps<typeof Ionicons>['name'];
 
 /** Big selectable card used in onboarding choices. */
 export function OptionCard({
