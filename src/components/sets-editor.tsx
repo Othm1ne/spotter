@@ -1,10 +1,12 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 
+import { useT } from '@/i18n';
 import { ExercisePicker } from '@/components/exercise-picker';
 import { ExerciseThumb } from '@/components/exercise-preview';
 import { Button } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import type { Exercise } from '@/db/workouts';
 import { formatDuration } from '@/lib/workout-math';
 
@@ -29,6 +31,9 @@ type Props = {
 
 /** One exercise with an editable kg × reps row per set. */
 export function SetsEditor(props: Props) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const { exercise, sets, restSeconds, onRestChange } = props;
   return (
     <View style={styles.block}>
@@ -39,35 +44,35 @@ export function SetsEditor(props: Props) {
             <Text style={styles.name} numberOfLines={2}>
               {exercise.name}
             </Text>
-            <Text style={styles.muted}>{exercise.muscle} · How to ›</Text>
+            <Text style={styles.muted}>{t(`muscles.${exercise.muscle}`)} · {t('exercise.howTo')}</Text>
           </View>
         </Pressable>
-        <Pressable onPress={props.onRemove} hitSlop={10} accessibilityLabel={`Remove ${exercise.name}`}>
-          <Ionicons name="trash-outline" size={20} color={Colors.textSecondary} />
+        <Pressable onPress={props.onRemove} hitSlop={10} accessibilityLabel={t('common.removeNamed', { name: exercise.name })}>
+          <Ionicons name="trash-outline" size={20} color={c.textSecondary} />
         </Pressable>
       </View>
 
       {restSeconds !== undefined && onRestChange && (
         <View style={styles.rest}>
-          <Ionicons name="timer-outline" size={18} color={Colors.accent} />
-          <Text style={styles.restLabel}>Rest</Text>
+          <Ionicons name="timer-outline" size={18} color={c.accent} />
+          <Text style={styles.restLabel}>{t('workout.rest')}</Text>
           <Pressable
             onPress={() => onRestChange(Math.max(0, restSeconds - REST_STEP))}
             hitSlop={6}
             style={styles.restButton}>
-            <Ionicons name="remove" size={18} color={Colors.text} />
+            <Ionicons name="remove" size={18} color={c.text} />
           </Pressable>
-          <Text style={styles.restValue}>{restSeconds === 0 ? 'Off' : formatDuration(restSeconds)}</Text>
+          <Text style={styles.restValue}>{restSeconds === 0 ? t('common.off') : formatDuration(restSeconds)}</Text>
           <Pressable onPress={() => onRestChange(Math.min(600, restSeconds + REST_STEP))} hitSlop={6} style={styles.restButton}>
-            <Ionicons name="add" size={18} color={Colors.text} />
+            <Ionicons name="add" size={18} color={c.text} />
           </Pressable>
         </View>
       )}
 
       <View style={styles.row}>
-        <Text style={[styles.colSet, styles.colHead]}>SET</Text>
-        <Text style={[styles.colInput, styles.colHead]}>KG</Text>
-        <Text style={[styles.colInput, styles.colHead]}>REPS</Text>
+        <Text style={[styles.colSet, styles.colHead]}>{t('workout.colSet')}</Text>
+        <Text style={[styles.colInput, styles.colHead]}>{t('workout.colKg')}</Text>
+        <Text style={[styles.colInput, styles.colHead]}>{t('workout.colReps')}</Text>
         <View style={styles.colRemove} />
       </View>
       {sets.map((s, i) => (
@@ -76,27 +81,27 @@ export function SetsEditor(props: Props) {
           <TextInput
             style={[styles.colInput, styles.input]}
             value={s.weight}
-            onChangeText={(t) => props.onChangeSet(i, 'weight', t)}
+            onChangeText={(text) => props.onChangeSet(i, 'weight', text)}
             keyboardType="decimal-pad"
             placeholder={props.placeholders?.[i]?.weight || '–'}
-            placeholderTextColor={Colors.textSecondary}
+            placeholderTextColor={c.textSecondary}
             selectTextOnFocus
           />
           <TextInput
             style={[styles.colInput, styles.input]}
             value={s.reps}
-            onChangeText={(t) => props.onChangeSet(i, 'reps', t)}
+            onChangeText={(text) => props.onChangeSet(i, 'reps', text)}
             keyboardType="number-pad"
             placeholder={props.placeholders?.[i]?.reps || '–'}
-            placeholderTextColor={Colors.textSecondary}
+            placeholderTextColor={c.textSecondary}
             selectTextOnFocus
           />
           <Pressable onPress={() => props.onRemoveSet(i)} hitSlop={8} style={styles.colRemove}>
-            <Ionicons name="close" size={20} color={Colors.textSecondary} />
+            <Ionicons name="close" size={20} color={c.textSecondary} />
           </Pressable>
         </View>
       ))}
-      <Button label="+ Add set" variant="secondary" onPress={props.onAddSet} style={styles.addSet} />
+      <Button label={t('workout.addSet')} variant="secondary" onPress={props.onAddSet} style={styles.addSet} />
     </View>
   );
 }
@@ -111,13 +116,15 @@ export function ExercisePickerModal({
   onClose: () => void;
   onPick: (exercise: Exercise) => void;
 }) {
+  const t = useT();
+  const styles = useStyles();
   return (
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.sheet}>
         <View style={styles.sheetHeader}>
-          <Text style={styles.sheetTitle}>Add exercise</Text>
+          <Text style={styles.sheetTitle}>{t('screens.addExercise')}</Text>
           <Pressable onPress={onClose} hitSlop={12}>
-            <Text style={styles.close}>Close</Text>
+            <Text style={styles.close}>{t('common.close')}</Text>
           </Pressable>
         </View>
         <ExercisePicker onPick={onPick} />
@@ -126,40 +133,40 @@ export function ExercisePickerModal({
   );
 }
 
-const styles = StyleSheet.create({
-  block: { gap: Spacing.sm, backgroundColor: Colors.surface, borderRadius: Radius.lg, padding: Spacing.md },
+const useStyles = makeStyles((c) => ({
+  block: { gap: Spacing.sm, backgroundColor: c.surface, borderRadius: Radius.lg, padding: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   title: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  name: { color: Colors.accent, fontSize: 17, fontWeight: '700' },
-  muted: { color: Colors.textSecondary, fontSize: 13 },
+  name: { color: c.accent, fontSize: 17, fontWeight: '700' },
+  muted: { color: c.textSecondary, fontSize: 13 },
   rest: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: c.surfaceRaised,
     borderRadius: Radius.sm,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.xs,
   },
-  restLabel: { color: Colors.text, fontWeight: '700', flex: 1 },
+  restLabel: { color: c.text, fontWeight: '700', flex: 1 },
   restButton: {
     width: 34,
     height: 34,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  restValue: { color: Colors.text, fontSize: 16, fontWeight: '800', minWidth: 52, textAlign: 'center', fontVariant: ['tabular-nums'] },
+  restValue: { color: c.text, fontSize: 16, fontWeight: '800', minWidth: 52, textAlign: 'center', fontVariant: ['tabular-nums'] },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  colHead: { color: Colors.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  colHead: { color: c.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   colSet: { width: 32, textAlign: 'center' },
   colInput: { flex: 1 },
   colRemove: { width: 32, alignItems: 'center' },
-  setNumber: { color: Colors.text, fontWeight: '700', fontSize: 15 },
+  setNumber: { color: c.text, fontWeight: '700', fontSize: 15 },
   input: {
-    backgroundColor: Colors.surfaceRaised,
-    color: Colors.text,
+    backgroundColor: c.surfaceRaised,
+    color: c.text,
     borderRadius: Radius.sm,
     height: 44,
     textAlign: 'center',
@@ -167,7 +174,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   addSet: { minHeight: 40 },
-  sheet: { flex: 1, backgroundColor: Colors.background },
+  sheet: { flex: 1, backgroundColor: c.background },
   sheetHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -175,6 +182,6 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     paddingBottom: 0,
   },
-  sheetTitle: { color: Colors.text, fontSize: 20, fontWeight: '800' },
-  close: { color: Colors.accent, fontSize: 17, fontWeight: '700' },
-});
+  sheetTitle: { color: c.text, fontSize: 20, fontWeight: '800' },
+  close: { color: c.accent, fontSize: 17, fontWeight: '700' },
+}));

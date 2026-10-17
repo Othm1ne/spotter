@@ -43,16 +43,21 @@ export async function createBackup(db: SQLiteDatabase): Promise<Backup> {
   return { app: 'spotter', version: await schemaVersion(db), exportedAt: Date.now(), exercises, tables };
 }
 
-export class BackupError extends Error {}
+/** A file that can't be restored: `kind` picks the translated explanation. */
+export class BackupError extends Error {
+  constructor(public kind: 'not_backup' | 'version') {
+    super(kind);
+  }
+}
 
 /** Checks a parsed file is a Spotter backup this version of the app can restore. */
 export async function validateBackup(db: SQLiteDatabase, data: unknown): Promise<Backup> {
   const backup = data as Partial<Backup> | null;
   if (!backup || backup.app !== 'spotter' || typeof backup.tables !== 'object' || !Array.isArray(backup.exercises)) {
-    throw new BackupError("This file isn't a Spotter backup.");
+    throw new BackupError('not_backup');
   }
   if (backup.version !== (await schemaVersion(db))) {
-    throw new BackupError('This backup was made with a different version of Spotter. Update both phones to the same version first.');
+    throw new BackupError('version');
   }
   return backup as Backup;
 }

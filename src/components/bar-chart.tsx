@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { useT } from '@/i18n';
+import { Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 
 export type Bar = { key: string; label: string; value: number; current?: boolean };
 
@@ -14,10 +16,11 @@ type Props = {
   describe: (bar: Bar) => string;
 };
 
-const BAR_DIM = '#4A4A55';
-
 /** Single-series column chart. Tap a bar to read its exact value. */
 export function BarChart({ bars, goal, height = 150, describe }: Props) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const [selected, setSelected] = useState<string | null>(null);
   const max = Math.max(1, goal ?? 0, ...bars.map((b) => b.value));
   const top = niceMax(max);
@@ -27,19 +30,19 @@ export function BarChart({ bars, goal, height = 150, describe }: Props) {
   return (
     <View style={styles.wrap}>
       <Text style={styles.readout} numberOfLines={1}>
-        {picked ? describe(picked) : 'Tap a bar for details'}
+        {picked ? describe(picked) : t('chart.tapBar')}
       </Text>
       <View style={[styles.plot, { height }]}>
         <View style={styles.axis}>
-          {ticks.map((t) => (
-            <Text key={t} style={styles.tick}>
-              {formatTick(t)}
+          {ticks.map((tick) => (
+            <Text key={tick} style={styles.tick}>
+              {formatTick(tick)}
             </Text>
           ))}
         </View>
         <View style={styles.area}>
-          {ticks.map((t) => (
-            <View key={t} style={[styles.grid, { bottom: (t / top) * height }]} />
+          {ticks.map((tick) => (
+            <View key={tick} style={[styles.grid, { bottom: (tick / top) * height }]} />
           ))}
           {goal !== undefined && (
             <View style={[styles.goal, { bottom: (goal / top) * height }]}>
@@ -65,7 +68,7 @@ export function BarChart({ bars, goal, height = 150, describe }: Props) {
                       styles.bar,
                       {
                         height: bar.value > 0 ? Math.max(6, (bar.value / top) * height) : 4,
-                        backgroundColor: bar.value === 0 ? Colors.surfaceRaised : reached ? Colors.accent : BAR_DIM,
+                        backgroundColor: bar.value === 0 ? c.surfaceRaised : reached ? c.accent : c.chartDim,
                       },
                       isSelected && styles.barSelected,
                     ]}
@@ -100,29 +103,29 @@ function formatTick(n: number) {
 
 const AXIS_WIDTH = 24;
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrap: { gap: Spacing.xs },
-  readout: { color: Colors.textSecondary, fontSize: 13, fontWeight: '600', minHeight: 18 },
+  readout: { color: c.textSecondary, fontSize: 13, fontWeight: '600', minHeight: 18 },
   plot: { flexDirection: 'row' },
   axis: { width: AXIS_WIDTH, justifyContent: 'space-between' },
-  tick: { color: Colors.textSecondary, fontSize: 10, marginTop: -6, marginBottom: -6 },
+  tick: { color: c.textSecondary, fontSize: 10, marginTop: -6, marginBottom: -6 },
   area: { flex: 1 },
-  grid: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: Colors.border },
+  grid: { position: 'absolute', left: 0, right: 0, height: StyleSheet.hairlineWidth, backgroundColor: c.border },
   goal: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', gap: 4, zIndex: 1 },
-  dash: { flex: 1, height: 1.5, backgroundColor: Colors.textSecondary },
+  dash: { flex: 1, height: 1.5, backgroundColor: c.textSecondary },
   goalLabel: {
     position: 'absolute',
     right: 0,
     bottom: 2,
-    color: Colors.textSecondary,
+    color: c.textSecondary,
     fontSize: 10,
     fontWeight: '700',
   },
   bars: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
   slot: { flex: 1, height: '100%', justifyContent: 'flex-end', alignItems: 'center' },
   bar: { width: '70%', maxWidth: 28, borderTopLeftRadius: 4, borderTopRightRadius: 4 },
-  barSelected: { borderWidth: 2, borderColor: Colors.text },
+  barSelected: { borderWidth: 2, borderColor: c.text },
   labels: { flexDirection: 'row', gap: 2 },
-  label: { flex: 1, textAlign: 'center', color: Colors.textSecondary, fontSize: 11 },
-  labelCurrent: { color: Colors.accent, fontWeight: '800' },
-});
+  label: { flex: 1, textAlign: 'center', color: c.textSecondary, fontSize: 11 },
+  labelCurrent: { color: c.accent, fontWeight: '800' },
+}));

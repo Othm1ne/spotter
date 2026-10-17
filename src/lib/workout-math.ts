@@ -39,11 +39,12 @@ export function parseNumber(text: string): number | null {
   return text.trim() === '' || Number.isNaN(n) || n < 0 ? null : n;
 }
 
-export function defaultWorkoutName(date: Date): string {
+/** Part of the day a workout started in, for its default name ("Morning workout"). */
+export function partOfDay(date: Date): 'morning' | 'afternoon' | 'evening' {
   const h = date.getHours();
-  if (h < 11) return 'Morning workout';
-  if (h < 17) return 'Afternoon workout';
-  return 'Evening workout';
+  if (h < 11) return 'morning';
+  if (h < 17) return 'afternoon';
+  return 'evening';
 }
 
 /** A workout still open after this long was most likely forgotten. */
@@ -57,4 +58,10 @@ export function isStaleWorkout(startedAt: number, now: number): boolean {
 export function formatElapsed(ms: number): string {
   const minutes = Math.round(ms / 60000);
   return minutes >= 120 ? `${Math.round(minutes / 60)} h` : `${minutes} min`;
+}
+
+/** "+250" or "-250": a change with its sign. */
+export function signed(value: number | string): string {
+  const n = Number(value);
+  return n > 0 ? `+${value}` : String(value);
 }

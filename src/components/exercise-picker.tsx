@@ -2,8 +2,10 @@ import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
+import { useT } from '@/i18n';
 import { ExerciseThumb } from '@/components/exercise-preview';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { MUSCLES } from '@/db/exercise-seed';
 import { listExercises, type Exercise } from '@/db/workouts';
 
@@ -31,6 +33,9 @@ type Props = {
 
 /** Searchable exercise library with muscle filter chips. */
 export function ExercisePicker({ onPick, onInfo }: Props) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [query, setQuery] = useState('');
@@ -58,16 +63,22 @@ export function ExercisePicker({ onPick, onInfo }: Props) {
       <TextInput
         value={query}
         onChangeText={setQuery}
-        placeholder="Search exercises"
-        placeholderTextColor={Colors.textSecondary}
+        placeholder={t('exercise.search')}
+        placeholderTextColor={c.textSecondary}
         style={styles.search}
         autoCorrect={false}
         clearButtonMode="while-editing"
       />
-      <ChipRow options={MUSCLES} value={muscle} onChange={setMuscle} allLabel="All muscles" />
-      <ChipRow options={EQUIPMENT} value={equipment} onChange={setEquipment} allLabel="All equipment" />
+      <ChipRow options={MUSCLES} value={muscle} onChange={setMuscle} allLabel={t('exercise.allMuscles')} format={(m) => t(`muscles.${m}`)} />
+      <ChipRow
+        options={EQUIPMENT}
+        value={equipment}
+        onChange={setEquipment}
+        allLabel={t('exercise.allEquipment')}
+        format={(e) => t(`equipment.${e}`)}
+      />
       <Text style={styles.count}>
-        {filtered.length} exercise{filtered.length === 1 ? '' : 's'}
+        {t('exercise.count', { count: filtered.length })}
       </Text>
       <FlatList
         data={filtered}
@@ -83,7 +94,7 @@ export function ExercisePicker({ onPick, onInfo }: Props) {
             <View style={{ flex: 1 }}>
               <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
               <Text style={styles.itemMeta}>
-                {item.muscle} · {item.equipment}
+                {t(`muscles.${item.muscle}`)} · {t(`equipment.${item.equipment}`)}
               </Text>
             </View>
             {onInfo && (
@@ -93,7 +104,7 @@ export function ExercisePicker({ onPick, onInfo }: Props) {
             )}
           </Pressable>
         )}
-        ListEmptyComponent={<Text style={styles.none}>No exercise matches “{query}”.</Text>}
+        ListEmptyComponent={<Text style={styles.none}>{t('exercise.noMatch', { query })}</Text>}
       />
     </View>
   );
@@ -104,12 +115,16 @@ function ChipRow({
   value,
   onChange,
   allLabel,
+  format,
 }: {
   options: readonly string[];
   value: string | null;
   onChange: (value: string | null) => void;
   allLabel: string;
+  format: (option: string) => string;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -118,7 +133,7 @@ function ChipRow({
             key={option ?? 'all'}
             onPress={() => onChange(option)}
             style={[styles.chip, value === option && styles.chipActive]}>
-            <Text style={[styles.chipLabel, value === option && { color: Colors.accentText }]}>{option ?? allLabel}</Text>
+            <Text style={[styles.chipLabel, value === option && { color: c.accentText }]}>{option === null ? allLabel : format(option)}</Text>
           </Pressable>
         ))}
       </ScrollView>
@@ -126,13 +141,13 @@ function ChipRow({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   search: {
     margin: Spacing.lg,
     marginBottom: Spacing.sm,
-    backgroundColor: Colors.surfaceRaised,
-    color: Colors.text,
+    backgroundColor: c.surfaceRaised,
+    color: c.text,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.lg,
     height: 44,
@@ -140,34 +155,34 @@ const styles = StyleSheet.create({
   },
   chips: { paddingHorizontal: Spacing.lg, gap: Spacing.sm, paddingBottom: Spacing.sm },
   chip: {
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: c.surfaceRaised,
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
   },
-  chipActive: { backgroundColor: Colors.accent },
-  chipLabel: { color: Colors.text, fontWeight: '600' },
+  chipActive: { backgroundColor: c.accent },
+  chipLabel: { color: c.text, fontWeight: '600' },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
     paddingHorizontal: Spacing.lg,
     height: ITEM_HEIGHT,
-    borderBottomColor: Colors.border,
+    borderBottomColor: c.border,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  count: { color: Colors.textSecondary, fontSize: 12, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs },
-  itemName: { color: Colors.text, fontSize: 16, fontWeight: '600' },
-  itemMeta: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
+  count: { color: c.textSecondary, fontSize: 12, paddingHorizontal: Spacing.lg, paddingBottom: Spacing.xs },
+  itemName: { color: c.text, fontSize: 16, fontWeight: '600' },
+  itemMeta: { color: c.textSecondary, fontSize: 13, marginTop: 2 },
   info: {
     width: 36,
     height: 36,
     borderRadius: Radius.pill,
     borderWidth: 1.5,
-    borderColor: Colors.accent,
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  infoLabel: { color: Colors.accent, fontSize: 17, fontWeight: '800', fontStyle: 'italic' },
-  none: { color: Colors.textSecondary, textAlign: 'center', padding: Spacing.xl },
-});
+  infoLabel: { color: c.accent, fontSize: 17, fontWeight: '800', fontStyle: 'italic' },
+  none: { color: c.textSecondary, textAlign: 'center', padding: Spacing.xl },
+}));

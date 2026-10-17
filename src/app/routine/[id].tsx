@@ -2,11 +2,13 @@ import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput } from 'react-native';
 
+import { useT } from '@/i18n';
 import { ExercisePickerModal, SetsEditor, type DraftSet } from '@/components/sets-editor';
 import { Button } from '@/components/ui';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { deleteRoutine, getRoutine, saveRoutine } from '@/db/routines';
 import { getDefaultRest } from '@/db/settings';
 import { getPreviousSets, type Exercise } from '@/db/workouts';
@@ -22,6 +24,9 @@ const toText = (n: number | null) => (n === null ? '' : formatWeight(n));
 
 /** Create or edit a workout plan: exercises, kg × reps per set, and rest time. `id` is "new" or a routine id. */
 export default function RoutineEditorScreen() {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const params = useLocalSearchParams<{ id: string }>();
   const routineId = params.id === 'new' ? null : Number(params.id);
@@ -71,13 +76,13 @@ export default function RoutineEditorScreen() {
   async function onSave() {
     if (saving) return;
     if (blocks.length === 0) {
-      Alert.alert('Add an exercise', 'A workout plan needs at least one exercise.');
+      Alert.alert(t('routine.needExerciseTitle'), t('routine.needExerciseBody'));
       return;
     }
     setSaving(true);
     await saveRoutine(db, {
       id: routineId,
-      name: name.trim() || 'My workout',
+      name: name.trim() || t('routine.defaultName'),
       exercises: blocks.map((b) => ({
         exercise: b.exercise,
         restSeconds: b.restSeconds,
@@ -92,10 +97,10 @@ export default function RoutineEditorScreen() {
 
   function onDelete() {
     if (routineId === null) return;
-    Alert.alert('Delete this plan?', 'Workouts you already did with it stay in your history.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('routine.deleteTitle'), t('routine.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteRoutine(db, routineId);
@@ -109,10 +114,10 @@ export default function RoutineEditorScreen() {
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen
         options={{
-          title: routineId === null ? 'New workout' : 'Edit workout',
+          title: routineId === null ? t('routine.newTitle') : t('routine.editTitle'),
           headerRight: () => (
             <Pressable onPress={onSave} hitSlop={8} style={styles.save}>
-              <Text style={styles.saveLabel}>Save</Text>
+              <Text style={styles.saveLabel}>{t('common.save')}</Text>
             </Pressable>
           ),
         }}
@@ -121,14 +126,14 @@ export default function RoutineEditorScreen() {
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder="Name it, e.g. Chest day"
-          placeholderTextColor={Colors.textSecondary}
+          placeholder={t('routine.namePlaceholder')}
+          placeholderTextColor={c.textSecondary}
           style={styles.name}
           returnKeyType="done"
           autoFocus={routineId === null}
         />
         <Text style={styles.hint}>
-          Leave kg empty to use what you lifted last time. Rest starts when you tick a set.
+          {t('routine.hint')}
         </Text>
 
         {blocks.map((b) => (
@@ -151,9 +156,9 @@ export default function RoutineEditorScreen() {
           />
         ))}
 
-        <Button label="+ Add exercise" onPress={() => setPicking(true)} />
-        {blocks.length > 0 && <Button label="Save workout" variant="secondary" onPress={onSave} />}
-        {routineId !== null && <Button label="Delete workout" variant="danger" onPress={onDelete} />}
+        <Button label={t('workout.addExercise')} onPress={() => setPicking(true)} />
+        {blocks.length > 0 && <Button label={t('common.saveWorkout')} variant="secondary" onPress={onSave} />}
+        {routineId !== null && <Button label={t('routine.delete')} variant="danger" onPress={onDelete} />}
       </ScrollView>
 
       <ExercisePickerModal visible={picking} onClose={() => setPicking(false)} onPick={addExercise} />
@@ -161,11 +166,11 @@ export default function RoutineEditorScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   content: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 80 },
   save: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
-  saveLabel: { color: Colors.accent, fontSize: 17, fontWeight: '700' },
-  name: { color: Colors.text, fontSize: 26, fontWeight: '800', padding: 0 },
-  hint: { color: Colors.textSecondary, fontSize: 13, marginTop: -Spacing.sm },
-});
+  saveLabel: { color: c.accent, fontSize: 17, fontWeight: '700' },
+  name: { color: c.text, fontSize: 26, fontWeight: '800', padding: 0 },
+  hint: { color: c.textSecondary, fontSize: 13, marginTop: -Spacing.sm },
+}));

@@ -88,7 +88,7 @@ function workoutsSection(input: CoachInput, now: Date): string {
   const recent = input.recent
     .map((w) => {
       const sets = w.top
-        .map((t) => `${t.exercise} ${t.sets} sets, top ${t.weight ? `${formatWeight(t.weight)} kg` : 'bodyweight'} × ${t.reps ?? '?'}`)
+        .map((s) => `${s.exercise} ${s.sets} sets, top ${s.weight ? `${formatWeight(s.weight)} kg` : 'bodyweight'} × ${s.reps ?? '?'}`)
         .join('; ');
       return `- ${daysAgo(w.started_at, now)} · ${w.name}: ${sets}`;
     })
@@ -121,8 +121,9 @@ function nutritionSection(input: CoachInput): string {
   return lines.join('\n');
 }
 
-export function buildCoachPrompt(input: CoachInput, now: Date): string {
+export function buildCoachPrompt(input: CoachInput, now: Date, language = 'English'): string {
   return `${RULES}
+- The app is set to ${language}: answer in ${language} unless the user writes in another language.
 
 Today: ${now.toDateString()}
 
@@ -137,16 +138,17 @@ ${nutritionSection(input)}`;
 }
 
 /** Starter questions, picked from what we know about the user. */
-export function suggestedQuestions(input: CoachInput): string[] {
-  const out: string[] = [];
+/** Starter questions as `coach.suggest.<key>` translations with their values. */
+export function suggestedQuestions(input: CoachInput): { key: string; params?: Record<string, string> }[] {
+  const out: { key: string; params?: Record<string, string> }[] = [];
   const p = input.profile;
-  if (input.recent[0]) out.push(`Review my last workout (${input.recent[0].name})`);
-  if (p?.goal === 'lose_fat') out.push('How do I keep my muscle while losing fat?');
-  if (p?.goal === 'build_muscle') out.push('How fast should I add weight to my lifts?');
-  if (input.bests[0]) out.push(`How can I improve my ${input.bests[0].name}?`);
-  if (input.todayFood.length > 0) out.push('How is my eating today?');
-  out.push('What should I eat before and after training?');
-  out.push('Which supplements are actually worth it?');
-  if (!p) out.push('Help me pick a goal');
+  if (input.recent[0]) out.push({ key: 'lastWorkout', params: { name: input.recent[0].name } });
+  if (p?.goal === 'lose_fat') out.push({ key: 'keepMuscle' });
+  if (p?.goal === 'build_muscle') out.push({ key: 'addWeight' });
+  if (input.bests[0]) out.push({ key: 'improveLift', params: { name: input.bests[0].name } });
+  if (input.todayFood.length > 0) out.push({ key: 'eatingToday' });
+  out.push({ key: 'aroundTraining' });
+  out.push({ key: 'supplements' });
+  if (!p) out.push({ key: 'pickGoal' });
   return out.slice(0, 4);
 }

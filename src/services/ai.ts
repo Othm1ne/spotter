@@ -3,6 +3,8 @@
  * relay URL and a shared app token, both from .env (EXPO_PUBLIC_ variables are inlined at build).
  */
 
+import { t } from '@/i18n';
+
 export type ChatMessage = { role: 'system' | 'user' | 'assistant'; content: string };
 
 export type AiErrorKind = 'not_configured' | 'offline' | 'rate_limited' | 'failed';
@@ -48,14 +50,5 @@ export async function aiChat(
 
 export function aiErrorMessage(error: unknown): string {
   const kind = error instanceof AiError ? error.kind : 'failed';
-  switch (kind) {
-    case 'not_configured':
-      return 'The AI coach is not set up on this build yet.';
-    case 'offline':
-      return "Couldn't reach the coach. Check your connection and try again.";
-    case 'rate_limited':
-      return 'The coach is busy right now (free plan limit). Try again in a minute.';
-    default:
-      return 'Something went wrong. Try again.';
-  }
+  return t(`errors.ai.${kind}`);
 }

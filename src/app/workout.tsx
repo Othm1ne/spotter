@@ -10,16 +10,18 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { useI18n, useT, type Params } from '@/i18n';
 import { ExerciseThumb } from '@/components/exercise-preview';
+import { MusicCard } from '@/components/music-card';
 import { Button } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { DEFAULT_REST_SECONDS, getDefaultRest, getKeepAwake } from '@/db/settings';
 import {
   addSet,
@@ -64,6 +66,10 @@ function toText(n: number | null) {
 }
 
 export default function WorkoutScreen() {
+  const { locale } = useI18n();
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const [workout, setWorkout] = useState<Workout | null>(null);
   const [name, setName] = useState('');
@@ -156,13 +162,23 @@ export default function WorkoutScreen() {
     const next = block.sets.findIndex((s) => s.done !== 1);
     const i = next === -1 ? block.sets.length - 1 : next;
     const set = block.sets[i];
-    if (!set) return 'Add a set';
+    if (!set) return t('workout.addASet');
     const draft = drafts[set.id];
     const weight = parseNumber(draft?.weight ?? '') ?? prevSets[i]?.weight ?? null;
     const reps = parseNumber(draft?.reps ?? '') ?? prevSets[i]?.reps ?? null;
-    if (weight === null && reps === null) return 'Set kg × reps';
-    if (weight === null) return `${reps} reps`;
+    if (weight === null && reps === null) return t('workout.setKgReps');
+    if (weight === null) return t('workout.reps', { count: reps ?? 0 });
     return `${formatWeight(weight)} kg × ${reps ?? '–'}`;
+  }
+
+  /** Progression hints are saved as `{ key, params }` JSON (see lib/program) and translated here. */
+  function hintText(hint: string) {
+    try {
+      const { key, params } = JSON.parse(hint) as { key: string; params: Params };
+      return t(`progress.${key}`, params);
+    } catch {
+      return hint;
+    }
   }
 
   function startRest(endsAt: number, next?: string | null) {
@@ -177,8 +193,9 @@ export default function WorkoutScreen() {
     if (!next) return null;
     const weight = parseNumber(drafts[next.id]?.weight ?? '');
     const reps = parseNumber(drafts[next.id]?.reps ?? '');
-    const target = weight !== null ? ` · ${formatWeight(weight)} kg × ${reps ?? '–'}` : reps !== null ? ` · ${reps} reps` : '';
-    return `${next.exercise_name} · set ${next.set_index + 1}${target}`;
+    const target =
+      weight !== null ? ` · ${formatWeight(weight)} kg × ${reps ?? '–'}` : reps !== null ? ` · ${t('workout.reps', { count: reps })}` : '';
+    return `${next.exercise_name} · ${t('workout.setNumber', { n: next.set_index + 1 })}${target}`;
   }
 
   async function stopRest() {
@@ -230,10 +247,10 @@ export default function WorkoutScreen() {
   }
 
   function onSetLongPress(set: WorkoutSet) {
-    Alert.alert('Delete set?', undefined, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('workout.deleteSet'), undefined, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteSet(db, set.id);
@@ -246,14 +263,14 @@ export default function WorkoutScreen() {
   function onBlockMenu(block: Block) {
     Alert.alert(block.name, undefined, [
       {
-        text: 'Remove exercise',
+        text: t('workout.removeExercise'),
         style: 'destructive',
         onPress: async () => {
           await removeExercise(db, workout!.id, block.position);
           load();
         },
       },
-      { text: 'Cancel', style: 'cancel' },
+      { text: t('common.cancel'), style: 'cancel' },
     ]);
   }
 
@@ -274,10 +291,10 @@ export default function WorkoutScreen() {
     if (!workout) return;
     const undone = sets.filter((s) => s.done !== 1).length;
     if (sets.length === undone) {
-      Alert.alert('Nothing logged yet', 'Tick at least one set before finishing, or discard the workout.');
+      Alert.alert(t('workout.nothingTitle'), t('workout.nothingBody'));
       return;
     }
-    const removal = undone > 0 ? `${undone} unticked set${undone > 1 ? 's' : ''} will be removed.` : undefined;
+    const removal = undone > 0 ? t('workout.unticked', { count: undone }) : undefined;
     const finishedAt = Date.now();
 
     // Forgotten workout: offer to end it when the last set was ticked instead of now.
@@ -285,32 +302,31 @@ export default function WorkoutScreen() {
       const lastSet = await getLastSetTime(db, workout.id);
       const fallback = workout.started_at + 60 * 60 * 1000;
       const endAt = lastSet ?? fallback;
-      const time = new Date(endAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      const time = new Date(endAt).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
       Alert.alert(
-        'Forgot to finish?',
-        `This workout has been open for ${formatElapsed(finishedAt - workout.started_at)}.` +
-          (removal ? ` ${removal}` : ''),
+        t('workout.forgotTitle'),
+        t('workout.forgotBody', { time: formatElapsed(finishedAt - workout.started_at) }) + (removal ? ` ${removal}` : ''),
         [
-          { text: lastSet ? `End at last set (${time})` : 'Count it as 1 hour', onPress: () => finish(endAt) },
-          { text: 'End now', onPress: () => finish(finishedAt) },
-          { text: 'Keep going', style: 'cancel' },
+          { text: lastSet ? t('workout.endAtLast', { time }) : t('workout.countHour'), onPress: () => finish(endAt) },
+          { text: t('workout.endNow'), onPress: () => finish(finishedAt) },
+          { text: t('workout.keepGoing'), style: 'cancel' },
         ]
       );
       return;
     }
 
-    Alert.alert('Finish workout?', removal, [
-      { text: 'Keep going', style: 'cancel' },
-      { text: 'Finish', onPress: () => finish(finishedAt) },
+    Alert.alert(t('workout.finishTitle'), removal, [
+      { text: t('workout.keepGoing'), style: 'cancel' },
+      { text: t('workout.finish'), onPress: () => finish(finishedAt) },
     ]);
   }
 
   function onDiscard() {
     if (!workout) return;
-    Alert.alert('Discard workout?', 'Everything logged in this workout will be deleted.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('workout.discardTitle'), t('workout.discardBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Discard',
+        text: t('workout.discard'),
         style: 'destructive',
         onPress: async () => {
           await stopRest();
@@ -336,12 +352,12 @@ export default function WorkoutScreen() {
           headerTitle: () => <Elapsed startedAt={startedAt} />,
           headerLeft: () => (
             <Pressable onPress={() => router.back()} hitSlop={12} style={styles.headerButton}>
-              <Text style={styles.minimize}>Hide</Text>
+              <Text style={styles.minimize}>{t('workout.hide')}</Text>
             </Pressable>
           ),
           headerRight: () => (
             <Pressable onPress={onFinish} hitSlop={8} style={styles.headerButton}>
-              <Text style={styles.finishLabel}>Finish</Text>
+              <Text style={styles.finishLabel}>{t('workout.finish')}</Text>
             </Pressable>
           ),
         }}
@@ -354,9 +370,11 @@ export default function WorkoutScreen() {
             onChangeText={setName}
             onEndEditing={() => name.trim() && renameWorkout(db, workout.id, name.trim())}
             style={styles.name}
-            placeholderTextColor={Colors.textSecondary}
+            placeholderTextColor={c.textSecondary}
             returnKeyType="done"
           />
+
+          <MusicCard />
 
           {blocks.map((block) => {
             const prevSets = previous.get(block.exerciseId) ?? [];
@@ -370,8 +388,9 @@ export default function WorkoutScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={styles.exerciseName}>{block.name}</Text>
                       <Text style={styles.muscle}>
-                        {block.muscle}
-                        {block.sets[0]?.rest_seconds ? ` · Rest ${formatDuration(block.sets[0].rest_seconds)}` : ''} · How to ›
+                        {t(`muscles.${block.muscle}`)}
+                        {block.sets[0]?.rest_seconds ? ` · ${t('workout.restTime', { time: formatDuration(block.sets[0].rest_seconds) })}` : ''} ·{' '}
+                        {t('exercise.howTo')}
                       </Text>
                     </View>
                   </Pressable>
@@ -382,8 +401,8 @@ export default function WorkoutScreen() {
 
                 {block.hint && (
                   <View style={styles.hint}>
-                    <Ionicons name="bulb-outline" size={14} color={Colors.accent} />
-                    <Text style={styles.hintText}>{block.hint}</Text>
+                    <Ionicons name="bulb-outline" size={14} color={c.accent} />
+                    <Text style={styles.hintText}>{hintText(block.hint)}</Text>
                   </View>
                 )}
 
@@ -392,7 +411,7 @@ export default function WorkoutScreen() {
                   <Ionicons
                     name={editing.has(block.position) ? 'chevron-up' : 'chevron-forward'}
                     size={16}
-                    color={Colors.text}
+                    color={c.text}
                   />
                 </Pressable>
 
@@ -407,7 +426,7 @@ export default function WorkoutScreen() {
                         key={set.id}
                         onPress={() => toggleDone(set, prev)}
                         onLongPress={() => onSetLongPress(set)}
-                        accessibilityLabel={`Set ${i + 1}${done ? ', done' : ''}`}
+                        accessibilityLabel={t(done ? 'workout.setDone' : 'workout.setNumber', { n: i + 1 })}
                         style={({ pressed }) => [styles.circle, done && styles.circleDone, pressed && { opacity: 0.7 }]}>
                         <Text style={[styles.circleText, done && styles.circleTextDone]}>{reps || '–'}</Text>
                       </Pressable>
@@ -415,19 +434,19 @@ export default function WorkoutScreen() {
                   })}
                   <Pressable
                     onPress={() => onAddSet(block)}
-                    accessibilityLabel="Add set"
+                    accessibilityLabel={t('workout.addSetLabel')}
                     style={({ pressed }) => [styles.circle, styles.circleAdd, pressed && { opacity: 0.7 }]}>
-                    <Ionicons name="add" size={24} color={Colors.textSecondary} />
+                    <Ionicons name="add" size={24} color={c.textSecondary} />
                   </Pressable>
                 </View>
 
                 {editing.has(block.position) && (
                   <View style={styles.editor}>
                     <View style={styles.row}>
-                      <Text style={[styles.colSet, styles.colHead]}>SET</Text>
-                      <Text style={[styles.colPrev, styles.colHead]}>LAST TIME</Text>
-                      <Text style={[styles.colInput, styles.colHead]}>KG</Text>
-                      <Text style={[styles.colInput, styles.colHead]}>REPS</Text>
+                      <Text style={[styles.colSet, styles.colHead]}>{t('workout.colSet')}</Text>
+                      <Text style={[styles.colPrev, styles.colHead]}>{t('workout.colLast')}</Text>
+                      <Text style={[styles.colInput, styles.colHead]}>{t('workout.colKg')}</Text>
+                      <Text style={[styles.colInput, styles.colHead]}>{t('workout.colReps')}</Text>
                     </View>
                     {block.sets.map((set, i) => {
                       const prev = prevSets[i];
@@ -443,19 +462,19 @@ export default function WorkoutScreen() {
                           <TextInput
                             style={[styles.colInput, styles.input]}
                             value={draft.weight}
-                            onChangeText={(t) => onChangeField(set, 'weight', t)}
+                            onChangeText={(text) => onChangeField(set, 'weight', text)}
                             keyboardType="decimal-pad"
                             placeholder={prev ? formatWeight(prev.weight) : ''}
-                            placeholderTextColor={Colors.textSecondary}
+                            placeholderTextColor={c.textSecondary}
                             selectTextOnFocus
                           />
                           <TextInput
                             style={[styles.colInput, styles.input]}
                             value={draft.reps}
-                            onChangeText={(t) => onChangeField(set, 'reps', t)}
+                            onChangeText={(text) => onChangeField(set, 'reps', text)}
                             keyboardType="number-pad"
                             placeholder={prev?.reps != null ? String(prev.reps) : ''}
-                            placeholderTextColor={Colors.textSecondary}
+                            placeholderTextColor={c.textSecondary}
                             selectTextOnFocus
                           />
                         </View>
@@ -468,10 +487,10 @@ export default function WorkoutScreen() {
           })}
 
           <Button
-            label="+ Add exercise"
+            label={t('workout.addExercise')}
             onPress={() => router.push({ pathname: '/add-exercise', params: { workoutId: String(workout.id) } })}
           />
-          <Button label="Discard workout" variant="danger" onPress={onDiscard} />
+          <Button label={t('workout.discardButton')} variant="danger" onPress={onDiscard} />
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -481,14 +500,14 @@ export default function WorkoutScreen() {
             <Text style={styles.restButtonLabel}>-15</Text>
           </Pressable>
           <View style={{ alignItems: 'center' }}>
-            <Text style={styles.restLabel}>REST</Text>
+            <Text style={styles.restLabel}>{t('workout.restLabel')}</Text>
             <Text style={styles.restTime}>{formatDuration(restLeft)}</Text>
           </View>
           <Pressable onPress={() => adjustRest(15)} style={styles.restButton}>
             <Text style={styles.restButtonLabel}>+15</Text>
           </Pressable>
           <Pressable onPress={stopRest} style={[styles.restButton, styles.skip]}>
-            <Text style={[styles.restButtonLabel, { color: Colors.accentText }]}>Skip</Text>
+            <Text style={[styles.restButtonLabel, { color: c.accentText }]}>{t('workout.skip')}</Text>
           </Pressable>
         </View>
       )}
@@ -497,36 +516,37 @@ export default function WorkoutScreen() {
 }
 
 function Elapsed({ startedAt }: { startedAt: number }) {
+  const styles = useStyles();
   const now = useNow();
   return <Text style={styles.elapsed}>{formatDuration((now - startedAt) / 1000)}</Text>;
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   headerButton: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, borderRadius: Radius.sm },
-  minimize: { color: Colors.accent, fontSize: 17, fontWeight: '600' },
-  elapsed: { color: Colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  finishLabel: { color: Colors.accent, fontWeight: '800', fontSize: 17 },
+  minimize: { color: c.accent, fontSize: 17, fontWeight: '600' },
+  elapsed: { color: c.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  finishLabel: { color: c.accent, fontWeight: '800', fontSize: 17 },
   content: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 140 },
-  name: { color: Colors.text, fontSize: 26, fontWeight: '800', padding: 0 },
+  name: { color: c.text, fontSize: 26, fontWeight: '800', padding: 0 },
   block: { gap: Spacing.sm },
   blockHeader: { flexDirection: 'row', alignItems: 'center' },
   blockTitle: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  exerciseName: { color: Colors.accent, fontSize: 18, fontWeight: '700' },
-  muscle: { color: Colors.textSecondary, fontSize: 13 },
+  exerciseName: { color: c.accent, fontSize: 18, fontWeight: '700' },
+  muscle: { color: c.textSecondary, fontSize: 13 },
   hint: { flexDirection: 'row', alignItems: 'center', gap: Spacing.xs, alignSelf: 'flex-start' },
-  hintText: { color: Colors.accent, fontSize: 13, fontWeight: '600', flexShrink: 1 },
-  menu: { color: Colors.textSecondary, fontSize: 18, fontWeight: '800', paddingHorizontal: Spacing.sm },
+  hintText: { color: c.accent, fontSize: 13, fontWeight: '600', flexShrink: 1 },
+  menu: { color: c.textSecondary, fontSize: 18, fontWeight: '800', paddingHorizontal: Spacing.sm },
   row: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
-  colHead: { color: Colors.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'center' },
+  colHead: { color: c.textSecondary, fontSize: 11, fontWeight: '700', textAlign: 'center' },
   colSet: { width: 32, alignItems: 'center' },
   colPrev: { flex: 1, alignItems: 'center' },
   colInput: { width: 64 },
-  setNumber: { color: Colors.text, fontWeight: '700', fontSize: 15 },
-  prevText: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center' },
+  setNumber: { color: c.text, fontWeight: '700', fontSize: 15 },
+  prevText: { color: c.textSecondary, fontSize: 14, textAlign: 'center' },
   input: {
-    backgroundColor: Colors.surfaceRaised,
-    color: Colors.text,
+    backgroundColor: c.surfaceRaised,
+    color: c.text,
     borderRadius: Radius.sm,
     height: 40,
     textAlign: 'center',
@@ -534,22 +554,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   summary: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end', gap: 4, marginTop: -Spacing.xs },
-  summaryText: { color: Colors.text, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  summaryText: { color: c.text, fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   circles: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.md },
   circle: {
     width: 56,
     height: 56,
     borderRadius: 28,
     borderWidth: 2.5,
-    borderColor: Colors.accent,
-    backgroundColor: 'rgba(198, 244, 50, 0.08)',
+    borderColor: c.accent,
+    backgroundColor: c.accentSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  circleDone: { backgroundColor: Colors.accent },
-  circleAdd: { borderColor: 'transparent', backgroundColor: Colors.surfaceRaised },
-  circleText: { color: Colors.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  circleTextDone: { color: Colors.accentText },
+  circleDone: { backgroundColor: c.accent },
+  circleAdd: { borderColor: 'transparent', backgroundColor: c.surfaceRaised },
+  circleText: { color: c.text, fontSize: 18, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  circleTextDone: { color: c.accentText },
   editor: { gap: Spacing.sm, marginTop: Spacing.xs },
   rest: {
     position: 'absolute',
@@ -559,20 +579,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.surface,
-    borderColor: Colors.accent,
+    backgroundColor: c.surface,
+    borderColor: c.accent,
     borderWidth: 1,
     borderRadius: Radius.lg,
     padding: Spacing.md,
   },
-  restLabel: { color: Colors.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
-  restTime: { color: Colors.text, fontSize: 26, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  restLabel: { color: c.accent, fontSize: 11, fontWeight: '800', letterSpacing: 1 },
+  restTime: { color: c.text, fontSize: 26, fontWeight: '800', fontVariant: ['tabular-nums'] },
   restButton: {
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: c.surfaceRaised,
     borderRadius: Radius.sm,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
   },
-  restButtonLabel: { color: Colors.text, fontWeight: '700' },
-  skip: { backgroundColor: Colors.accent },
-});
+  restButtonLabel: { color: c.text, fontWeight: '700' },
+  skip: { backgroundColor: c.accent },
+}));

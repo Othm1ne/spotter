@@ -4,8 +4,10 @@ import { useIsFocused } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, StyleSheet, Text, View } from 'react-native';
 
+import { useT } from '@/i18n';
 import { Button } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 
 // Module constant: a new settings object on every render makes the camera reconfigure its scanner.
 const SETTINGS: BarcodeSettings = { barcodeTypes: ['ean13', 'ean8', 'upc_a', 'upc_e'] };
@@ -20,6 +22,9 @@ const SLOW_START_MS = 5000;
  * screen is focused and `active` is true, so it shuts off when another screen opens on top.
  */
 export function BarcodeScanner({ active, onScan }: { active: boolean; onScan: (code: string) => void }) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const [permission, requestPermission] = useCameraPermissions();
   const focused = useIsFocused();
   const running = active && focused;
@@ -69,12 +74,12 @@ export function BarcodeScanner({ active, onScan }: { active: boolean; onScan: (c
   if (!permission.granted) {
     return (
       <View style={[styles.box, styles.center]}>
-        <Ionicons name="barcode-outline" size={44} color={Colors.accent} />
-        <Text style={styles.text}>Allow the camera to scan food barcodes. Nothing is recorded or saved.</Text>
+        <Ionicons name="barcode-outline" size={44} color={c.accent} />
+        <Text style={styles.text}>{t('scanner.allowBody')}</Text>
         {permission.canAskAgain ? (
-          <Button label="Allow camera" onPress={requestPermission} style={{ alignSelf: 'stretch' }} />
+          <Button label={t('scanner.allow')} onPress={requestPermission} style={{ alignSelf: 'stretch' }} />
         ) : (
-          <Button label="Open Settings" onPress={() => Linking.openSettings()} style={{ alignSelf: 'stretch' }} />
+          <Button label={t('common.openSettings')} onPress={() => Linking.openSettings()} style={{ alignSelf: 'stretch' }} />
         )}
       </View>
     );
@@ -95,24 +100,20 @@ export function BarcodeScanner({ active, onScan }: { active: boolean; onScan: (c
       )}
       {!ready && !mountError && (
         <View style={styles.overlayCenter} pointerEvents="none">
-          <ActivityIndicator color={Colors.accent} />
-          <Text style={styles.text}>Starting camera…</Text>
+          <ActivityIndicator color={c.accent} />
+          <Text style={styles.text}>{t('scanner.starting')}</Text>
         </View>
       )}
       {slow && !ready && !mountError && (
         <View style={styles.overlayBottom}>
-          <Text style={styles.debug}>
-            camera {mounted ? 'mounted' : 'not mounted'} · screen {focused ? 'focused' : 'not focused'} ·{' '}
-            {active ? 'active' : 'paused'}
-          </Text>
-          <Button label="Retry" variant="secondary" onPress={retry} />
+          <Button label={t('common.retry')} variant="secondary" onPress={retry} />
         </View>
       )}
       {mountError && (
         <View style={styles.overlayCenter}>
-          <Ionicons name="warning" size={28} color={Colors.warning} />
-          <Text style={styles.text}>The camera couldn&apos;t start: {mountError}</Text>
-          <Button label="Retry" variant="secondary" onPress={retry} />
+          <Ionicons name="warning" size={28} color={c.warning} />
+          <Text style={styles.text}>{t('scanner.failed', { error: mountError })}</Text>
+          <Button label={t('common.retry')} variant="secondary" onPress={retry} />
         </View>
       )}
       {ready && <View style={styles.frame} pointerEvents="none" />}
@@ -123,30 +124,29 @@ export function BarcodeScanner({ active, onScan }: { active: boolean; onScan: (c
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   box: {
     height: 260,
     backgroundColor: '#000000',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  center: { gap: Spacing.md, padding: Spacing.lg, backgroundColor: Colors.surface, borderRadius: Radius.lg },
+  center: { gap: Spacing.md, padding: Spacing.lg, backgroundColor: c.surface, borderRadius: Radius.lg },
   overlayCenter: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center', gap: Spacing.sm, padding: Spacing.lg },
   overlayBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, gap: Spacing.sm, padding: Spacing.md },
-  debug: { color: Colors.textSecondary, fontSize: 11, textAlign: 'center' },
-  text: { color: Colors.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  text: { color: c.textSecondary, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   frame: {
     width: '72%',
     height: 120,
     borderRadius: Radius.md,
     borderWidth: 3,
-    borderColor: Colors.accent,
+    borderColor: c.accent,
   },
   corners: {
     position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
     borderRadius: Radius.lg + 6,
     borderWidth: 6,
-    borderColor: Colors.background,
+    borderColor: c.background,
     margin: -6,
   },
-});
+}));

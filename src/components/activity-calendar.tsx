@@ -1,13 +1,14 @@
 import { useMemo, useRef } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 
-import { ActivityLevels, Colors, Spacing } from '@/constants/theme';
+import { useT, useI18n } from '@/i18n';
+import { Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { activityLevel, addDays, dayKey, parseDayKey, startOfWeek, type DayStat } from '@/lib/stats';
 
 const CELL = 14;
 const GAP = 3;
 const WEEKS = 53;
-const DAY_LABELS = ['Mon', '', 'Wed', '', 'Fri', '', ''];
 
 type Props = {
   days: Map<string, DayStat>;
@@ -17,6 +18,9 @@ type Props = {
 
 /** GitHub-style year of training: one column per week, Monday on top, newest week on the right. */
 export function ActivityCalendar({ days, selected, onSelect }: Props) {
+  const { locale } = useI18n();
+  const c = useColors();
+  const styles = useStyles();
   const scroll = useRef<ScrollView>(null);
   const today = dayKey(new Date());
 
@@ -31,9 +35,10 @@ export function ActivityCalendar({ days, selected, onSelect }: Props) {
   return (
     <View style={styles.wrap}>
       <View style={styles.dayLabels}>
-        {DAY_LABELS.map((label, i) => (
+        {/* Monday, Wednesday and Friday, in the user's language. */}
+        {[0, 1, 2, 3, 4, 5, 6].map((i) => (
           <Text key={i} style={styles.dayLabel}>
-            {label}
+            {i % 2 === 0 && i < 6 ? new Date(2024, 0, 1 + i).toLocaleDateString(locale, { weekday: 'short' }) : ''}
           </Text>
         ))}
       </View>
@@ -51,7 +56,7 @@ export function ActivityCalendar({ days, selected, onSelect }: Props) {
                 <View key={week[0]} style={styles.monthCell}>
                   {showLabel && (
                     <Text style={styles.monthLabel} numberOfLines={1}>
-                      {parseDayKey(week[0]).toLocaleDateString(undefined, { month: 'short' })}
+                      {parseDayKey(week[0]).toLocaleDateString(locale, { month: 'short' })}
                     </Text>
                   )}
                 </View>
@@ -71,7 +76,7 @@ export function ActivityCalendar({ days, selected, onSelect }: Props) {
                       hitSlop={GAP / 2}
                       style={[
                         styles.cell,
-                        { backgroundColor: ActivityLevels[level] },
+                        { backgroundColor: c.activity[level] },
                         key === today && styles.today,
                         key === selected && styles.selected,
                       ]}
@@ -88,30 +93,33 @@ export function ActivityCalendar({ days, selected, onSelect }: Props) {
 }
 
 export function ActivityLegend() {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.legend}>
-      <Text style={styles.legendText}>Less</Text>
-      {ActivityLevels.map((color) => (
+      <Text style={styles.legendText}>{t('calendar.less')}</Text>
+      {c.activity.map((color) => (
         <View key={color} style={[styles.legendCell, { backgroundColor: color }]} />
       ))}
-      <Text style={styles.legendText}>More</Text>
+      <Text style={styles.legendText}>{t('calendar.more')}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrap: { flexDirection: 'row', gap: Spacing.xs },
   dayLabels: { paddingTop: 18, gap: GAP },
-  dayLabel: { height: CELL, color: Colors.textSecondary, fontSize: 10, lineHeight: CELL },
+  dayLabel: { height: CELL, color: c.textSecondary, fontSize: 10, lineHeight: CELL },
   months: { flexDirection: 'row', height: 18 },
   monthCell: { width: CELL + GAP, overflow: 'visible' },
-  monthLabel: { position: 'absolute', width: 40, color: Colors.textSecondary, fontSize: 11 },
+  monthLabel: { position: 'absolute', width: 40, color: c.textSecondary, fontSize: 11 },
   grid: { flexDirection: 'row', gap: GAP },
   column: { gap: GAP },
   cell: { width: CELL, height: CELL, borderRadius: 3 },
-  today: { borderWidth: 1.5, borderColor: Colors.text },
-  selected: { borderWidth: 2, borderColor: Colors.text, transform: [{ scale: 1.15 }] },
+  today: { borderWidth: 1.5, borderColor: c.text },
+  selected: { borderWidth: 2, borderColor: c.text, transform: [{ scale: 1.15 }] },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-end' },
   legendCell: { width: 10, height: 10, borderRadius: 2 },
-  legendText: { color: Colors.textSecondary, fontSize: 11, marginHorizontal: 2 },
-});
+  legendText: { color: c.textSecondary, fontSize: 11, marginHorizontal: 2 },
+}));

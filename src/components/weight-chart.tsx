@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, type GestureResponderEvent } from 'react-native';
+import { Text, View, type GestureResponderEvent } from 'react-native';
 import Svg, { Circle, Line, Polyline } from 'react-native-svg';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { useT, useI18n } from '@/i18n';
+import { Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { smoothedWeight, type WeightEntry } from '@/lib/body';
 import { formatWeight } from '@/lib/workout-math';
 
@@ -16,6 +18,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  * the average is what matters). Touch and drag to read any day.
  */
 export function WeightChart({ entries, days = 90 }: { entries: WeightEntry[]; days?: number }) {
+  const { locale } = useI18n();
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const [width, setWidth] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
 
@@ -48,7 +54,7 @@ export function WeightChart({ entries, days = 90 }: { entries: WeightEntry[]; da
   return (
     <View style={{ gap: Spacing.sm }}>
       <Text style={styles.readout}>
-        {new Date(pick.measured_at).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+        {new Date(pick.measured_at).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })}
         {'  ·  '}
         <Text style={styles.readoutStrong}>{formatWeight(pick.weight)} kg</Text>
         {'  ·  avg '}
@@ -65,14 +71,14 @@ export function WeightChart({ entries, days = 90 }: { entries: WeightEntry[]; da
         {width > 0 && (
           <Svg width={width} height={HEIGHT}>
             {[hi, (hi + lo) / 2, lo].map((v) => (
-              <Line key={v} x1={AXIS} x2={width} y1={y(v)} y2={y(v)} stroke={Colors.border} strokeWidth={1} />
+              <Line key={v} x1={AXIS} x2={width} y1={y(v)} y2={y(v)} stroke={c.border} strokeWidth={1} />
             ))}
             {shown.map((p) => (
-              <Circle key={p.id} cx={x(p.measured_at)} cy={y(p.weight)} r={3} fill={Colors.textSecondary} opacity={0.6} />
+              <Circle key={p.id} cx={x(p.measured_at)} cy={y(p.weight)} r={3} fill={c.textSecondary} opacity={0.6} />
             ))}
             <Polyline
               points={shown.map((p, i) => `${x(p.measured_at)},${y(averages[i])}`).join(' ')}
-              stroke={Colors.accent}
+              stroke={c.accent}
               strokeWidth={2.5}
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -83,7 +89,7 @@ export function WeightChart({ entries, days = 90 }: { entries: WeightEntry[]; da
               x2={x(pick.measured_at)}
               y1={PAD_Y / 2}
               y2={HEIGHT - PAD_Y / 2}
-              stroke={Colors.textSecondary}
+              stroke={c.textSecondary}
               strokeWidth={1}
               strokeDasharray="3 3"
             />
@@ -91,8 +97,8 @@ export function WeightChart({ entries, days = 90 }: { entries: WeightEntry[]; da
               cx={x(pick.measured_at)}
               cy={y(averages[pickIndex])}
               r={6}
-              fill={Colors.accent}
-              stroke={Colors.surface}
+              fill={c.accent}
+              stroke={c.surface}
               strokeWidth={2}
             />
           </Svg>
@@ -106,22 +112,22 @@ export function WeightChart({ entries, days = 90 }: { entries: WeightEntry[]; da
         </View>
       </View>
       <View style={styles.legend}>
-        <View style={[styles.legendLine, { backgroundColor: Colors.accent }]} />
-        <Text style={styles.legendText}>7-day average</Text>
-        <View style={[styles.legendDot, { backgroundColor: Colors.textSecondary }]} />
-        <Text style={styles.legendText}>Weigh-ins</Text>
+        <View style={[styles.legendLine, { backgroundColor: c.accent }]} />
+        <Text style={styles.legendText}>{t('weight.avgLegend')}</Text>
+        <View style={[styles.legendDot, { backgroundColor: c.textSecondary }]} />
+        <Text style={styles.legendText}>{t('weight.weighIns')}</Text>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  readout: { color: Colors.textSecondary, fontSize: 13 },
-  readoutStrong: { color: Colors.text, fontWeight: '800' },
+const useStyles = makeStyles((c) => ({
+  readout: { color: c.textSecondary, fontSize: 13 },
+  readoutStrong: { color: c.text, fontWeight: '800' },
   axis: { position: 'absolute', left: 0, top: 0, bottom: 0, width: AXIS },
-  tick: { position: 'absolute', color: Colors.textSecondary, fontSize: 10 },
+  tick: { position: 'absolute', color: c.textSecondary, fontSize: 10 },
   legend: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendLine: { width: 16, height: 3, borderRadius: 2 },
   legendDot: { width: 7, height: 7, borderRadius: 4, marginLeft: Spacing.md },
-  legendText: { color: Colors.textSecondary, fontSize: 12 },
-});
+  legendText: { color: c.textSecondary, fontSize: 12 },
+}));

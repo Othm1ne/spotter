@@ -4,17 +4,20 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
+import { useT } from '@/i18n';
 import { ExerciseThumb } from '@/components/exercise-preview';
 import { Button, Card } from '@/components/ui';
-import { Colors, HeroGradient, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { deleteProgram, getCandidates, getProgram, saveProgram, type Program } from '@/db/program';
 import { getProfile } from '@/db/profile';
 import { useStartRoutine } from '@/hooks/use-start-routine';
 import { candidateNames, estimateMinutes, filterCandidates, programWeek, type Candidate, type ProgramDraft } from '@/lib/program';
-import { EQUIPMENTS, goalTitle, type Profile } from '@/lib/profile';
+import type { Profile } from '@/lib/profile';
+import { relativeDay } from '@/lib/stats';
 import { formatDuration } from '@/lib/workout-math';
 import { aiErrorMessage } from '@/services/ai';
 import { generateProgram } from '@/services/program';
@@ -23,6 +26,9 @@ type ExerciseInfo = Candidate & { gif: string | null };
 
 /** The training program: build it with AI, preview it, then follow it day by day. */
 export default function ProgramScreen() {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const start = useStartRoutine();
   const [loaded, setLoaded] = useState(false);
@@ -57,8 +63,8 @@ export default function ProgramScreen() {
     if (result.fallbackReason !== null) {
       setFallback(
         result.fallbackReason === 'invalid'
-          ? "The AI's plan didn't check out, so this one was built from a proven template. You can try again."
-          : `${aiErrorMessage(result.fallbackReason)} This program was built from a proven template instead.`
+          ? t('programScreen.invalid')
+          : `${aiErrorMessage(result.fallbackReason)} ${t('programScreen.templateInstead')}`
       );
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -75,17 +81,17 @@ export default function ProgramScreen() {
 
   function confirmSave() {
     if (!program) return save();
-    Alert.alert('Replace your program?', `"${program.name}" and its workout plans will be replaced. Your workout history stays.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Replace', style: 'destructive', onPress: save },
+    Alert.alert(t('programScreen.replaceTitle'), t('programScreen.replaceBody', { name: program.name }), [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('programScreen.replace'), style: 'destructive', onPress: save },
     ]);
   }
 
   function onDelete() {
-    Alert.alert('Delete your program?', 'Its workout plans are removed. Your workout history stays.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('programScreen.deleteTitle'), t('programScreen.deleteBody'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteProgram(db);
@@ -100,12 +106,12 @@ export default function ProgramScreen() {
   if (!profile) {
     return (
       <View style={[styles.screen, styles.center]}>
-        <Ionicons name="flag-outline" size={40} color={Colors.accent} />
-        <Text style={styles.title}>Set your goal first</Text>
+        <Ionicons name="flag-outline" size={40} color={c.accent} />
+        <Text style={styles.title}>{t('programScreen.goalFirst')}</Text>
         <Text style={[styles.muted, { textAlign: 'center' }]}>
-          Your program is built from your goal, schedule and equipment. It takes 2 minutes.
+          {t('programScreen.goalFirstBody')}
         </Text>
-        <Button label="Set your goal" onPress={() => router.push('/onboarding')} style={{ alignSelf: 'stretch' }} />
+        <Button label={t('plan.setTitle')} onPress={() => router.push('/onboarding')} style={{ alignSelf: 'stretch' }} />
       </View>
     );
   }
@@ -114,10 +120,10 @@ export default function ProgramScreen() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       {building ? (
         <Card style={styles.building}>
-          <ActivityIndicator color={Colors.accent} size="large" />
-          <Text style={styles.cardTitle}>Designing your program…</Text>
+          <ActivityIndicator color={c.accent} size="large" />
+          <Text style={styles.cardTitle}>{t('programScreen.designing')}</Text>
           <Text style={[styles.muted, { textAlign: 'center' }]}>
-            Choosing exercises for {profile.daysPerWeek} days a week, {profile.sessionMinutes} minutes each.
+            {t('programScreen.choosing', { days: profile.daysPerWeek, minutes: profile.sessionMinutes })}
           </Text>
         </Card>
       ) : draft ? (
@@ -139,24 +145,26 @@ export default function ProgramScreen() {
 }
 
 function Intro({ profile, onBuild }: { profile: Profile; onBuild: () => void }) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const chips = [
-    goalTitle(profile.goal),
-    `${profile.daysPerWeek} days / week`,
-    `${profile.sessionMinutes} min`,
-    EQUIPMENTS.find((e) => e.value === profile.equipment)?.title ?? '',
-    ...profile.limitations.map((l) => `Careful: ${l}`),
+    t(`goals.${profile.goal}.title`),
+    t('programScreen.daysPerWeek', { count: profile.daysPerWeek }),
+    t('common.minutes', { count: profile.sessionMinutes }),
+    t(`equipments.${profile.equipment}.title`),
+    ...profile.limitations.map((l) => t('programScreen.careful', { part: t(`limitations.${l}`) })),
   ];
   return (
     <>
-      <LinearGradient colors={HeroGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-        <Ionicons name="sparkles" size={30} color={Colors.accentText} />
-        <Text style={styles.heroTitle}>Your training program</Text>
+      <LinearGradient colors={c.hero} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
+        <Ionicons name="sparkles" size={30} color={c.accentText} />
+        <Text style={styles.heroTitle}>{t('programScreen.heroTitle')}</Text>
         <Text style={styles.heroBody}>
-          The AI coach picks exercises, sets, reps and rest for your goal. Each workout then suggests the weight to lift,
-          based on how your last sessions went.
+          {t('programScreen.heroBody')}
         </Text>
       </LinearGradient>
-      <Text style={styles.label}>BUILT FROM YOUR PROFILE</Text>
+      <Text style={styles.label}>{t('programScreen.fromProfile')}</Text>
       <View style={styles.chips}>
         {chips.map((c) => (
           <View key={c} style={styles.chip}>
@@ -165,9 +173,9 @@ function Intro({ profile, onBuild }: { profile: Profile; onBuild: () => void }) 
         ))}
       </View>
       <Pressable onPress={() => router.push('/onboarding')} hitSlop={8}>
-        <Text style={styles.link}>Change your goal or schedule ›</Text>
+        <Text style={styles.link}>{t('programScreen.changeGoal')}</Text>
       </Pressable>
-      <Button label="Build my program" onPress={onBuild} />
+      <Button label={t('programScreen.build')} onPress={onBuild} />
     </>
   );
 }
@@ -187,16 +195,19 @@ function DraftView({
   onRetry: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   return (
     <>
       <View style={{ gap: Spacing.xs }}>
         <View style={styles.badgeRow}>
           <View style={styles.badge}>
-            <Ionicons name={draft.source === 'ai' ? 'sparkles' : 'library'} size={12} color={Colors.accent} />
-            <Text style={styles.badgeText}>{draft.source === 'ai' ? 'Built by AI' : 'Template'}</Text>
+            <Ionicons name={draft.source === 'ai' ? 'sparkles' : 'library'} size={12} color={c.accent} />
+            <Text style={styles.badgeText}>{draft.source === 'ai' ? t('programScreen.byAi') : t('programScreen.template')}</Text>
           </View>
           <Text style={styles.muted}>
-            {draft.days.length} days / week · {draft.weeks} weeks
+            {t('programScreen.daysPerWeek', { count: draft.days.length })} · {t('programScreen.weeks', { count: draft.weeks })}
           </Text>
         </View>
         <Text style={styles.title}>{draft.name}</Text>
@@ -204,7 +215,7 @@ function DraftView({
       </View>
       {fallback && (
         <View style={styles.notice}>
-          <Ionicons name="information-circle" size={18} color={Colors.warning} />
+          <Ionicons name="information-circle" size={18} color={c.warning} />
           <Text style={[styles.muted, { flex: 1 }]}>{fallback}</Text>
         </View>
       )}
@@ -227,7 +238,7 @@ function DraftView({
                   <View style={{ flex: 1 }}>
                     <Text style={styles.exerciseName}>{info?.name}</Text>
                     <Text style={styles.muted}>
-                      {ex.sets} × {ex.repMin === ex.repMax ? ex.repMin : `${ex.repMin}–${ex.repMax}`} · rest {formatDuration(ex.restSeconds)}
+                      {ex.sets} × {ex.repMin === ex.repMax ? ex.repMin : `${ex.repMin}–${ex.repMax}`} · {t('programScreen.rest', { time: formatDuration(ex.restSeconds) })}
                     </Text>
                   </View>
                 </View>
@@ -237,9 +248,9 @@ function DraftView({
         </Animated.View>
       ))}
 
-      <Button label="Save program" onPress={onSave} />
-      <Button label="Build another one" variant="secondary" onPress={onRetry} />
-      <Button label="Cancel" variant="ghost" onPress={onCancel} />
+      <Button label={t('programScreen.save')} onPress={onSave} />
+      <Button label={t('programScreen.another')} variant="secondary" onPress={onRetry} />
+      <Button label={t('common.cancel')} variant="ghost" onPress={onCancel} />
     </>
   );
 }
@@ -257,14 +268,15 @@ function ProgramView({
   onRebuild: () => void;
   onDelete: () => void;
 }) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const week = programWeek(program.started_at, program.weeks, now);
   const finished = now - program.started_at > program.weeks * 7 * 86_400_000;
   return (
     <>
       <View style={{ gap: Spacing.xs }}>
-        <Text style={styles.label}>
-          WEEK {week} OF {program.weeks}
-        </Text>
+        <Text style={styles.label}>{t('programScreen.week', { week, weeks: program.weeks })}</Text>
         <Text style={styles.title}>{program.name}</Text>
         {program.summary ? <Text style={styles.body}>{program.summary}</Text> : null}
         <View style={styles.track}>
@@ -273,9 +285,9 @@ function ProgramView({
       </View>
       {finished && (
         <View style={styles.notice}>
-          <Ionicons name="trophy" size={18} color={Colors.accent} />
+          <Ionicons name="trophy" size={18} color={c.accent} />
           <Text style={[styles.muted, { flex: 1 }]}>
-            You finished this program. Build a new one to keep progressing with fresh exercises.
+            {t('programScreen.finished')}
           </Text>
         </View>
       )}
@@ -290,19 +302,22 @@ function ProgramView({
             <Card style={[styles.day, next && styles.nextDay]}>
               <View style={styles.dayHeader}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  {next && <Text style={styles.nextLabel}>NEXT UP</Text>}
+                  {next && <Text style={styles.nextLabel}>{t('programScreen.nextUp')}</Text>}
                   <Text style={styles.cardTitle}>{day.name}</Text>
                   <Text style={styles.muted} numberOfLines={2}>
-                    {day.exercise_count} exercises · ~{day.minutes} min · {day.exercises}
+                    {t('program.dayLine', { count: day.exercise_count, minutes: day.minutes, exercises: day.exercises ?? '' })}
                   </Text>
-                  <Text style={styles.small}>{day.last_done ? `Last done ${ago(day.last_done, now)}` : 'Not done yet'} · tap to edit</Text>
+                  <Text style={styles.small}>
+                    {day.last_done ? t(`time.lastDone.${relativeDay(day.last_done, now).key}`, { count: relativeDay(day.last_done, now).count }) : t('programScreen.notDone')} ·{' '}
+                    {t('programScreen.tapToEdit')}
+                  </Text>
                 </View>
                 <Pressable
                   onPress={() => onStart(day.routine_id)}
                   hitSlop={8}
                   style={[styles.play, !next && styles.playQuiet]}
-                  accessibilityLabel={`Start ${day.name}`}>
-                  <Ionicons name="play" size={20} color={next ? Colors.accentText : Colors.accent} />
+                  accessibilityLabel={t('common.startNamed', { name: day.name })}>
+                  <Ionicons name="play" size={20} color={next ? c.accentText : c.accent} />
                 </Pressable>
               </View>
             </Card>
@@ -311,37 +326,32 @@ function ProgramView({
       })}
 
       <Text style={styles.small}>
-        Weights are suggested each workout: hit the top of the rep range on every set and the next session adds weight.
+        {t('programScreen.progressionNote')}
       </Text>
-      <Button label="Build a new program" variant="secondary" onPress={onRebuild} />
-      <Button label="Delete program" variant="danger" onPress={onDelete} />
+      <Button label={t('programScreen.rebuild')} variant="secondary" onPress={onRebuild} />
+      <Button label={t('programScreen.delete')} variant="danger" onPress={onDelete} />
     </>
   );
 }
 
-function ago(time: number, now: number): string {
-  const days = Math.floor((now - time) / 86_400_000);
-  return days <= 0 ? 'today' : days === 1 ? 'yesterday' : `${days} days ago`;
-}
-
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   center: { alignItems: 'center', justifyContent: 'center', gap: Spacing.md, padding: Spacing.xl },
   content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 60 },
   hero: { borderRadius: Radius.lg, padding: Spacing.xl, gap: Spacing.sm },
-  heroTitle: { color: Colors.accentText, fontSize: 26, fontWeight: '800' },
-  heroBody: { color: Colors.accentText, fontSize: 15, lineHeight: 21, opacity: 0.85 },
-  label: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: Spacing.xs },
+  heroTitle: { color: c.accentText, fontSize: 26, fontWeight: '800' },
+  heroBody: { color: c.accentText, fontSize: 15, lineHeight: 21, opacity: 0.85 },
+  label: { color: c.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5, marginTop: Spacing.xs },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-  chip: { backgroundColor: Colors.surface, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 6 },
-  chipText: { color: Colors.text, fontSize: 14, fontWeight: '600' },
-  link: { color: Colors.accent, fontSize: 14, fontWeight: '600' },
-  title: { color: Colors.text, fontSize: 26, fontWeight: '800' },
-  body: { color: Colors.text, fontSize: 15, lineHeight: 21, opacity: 0.85 },
-  muted: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18 },
-  small: { color: Colors.textSecondary, fontSize: 12, lineHeight: 17 },
+  chip: { backgroundColor: c.surface, borderRadius: Radius.pill, paddingHorizontal: Spacing.md, paddingVertical: 6 },
+  chipText: { color: c.text, fontSize: 14, fontWeight: '600' },
+  link: { color: c.accent, fontSize: 14, fontWeight: '600' },
+  title: { color: c.text, fontSize: 26, fontWeight: '800' },
+  body: { color: c.text, fontSize: 15, lineHeight: 21, opacity: 0.85 },
+  muted: { color: c.textSecondary, fontSize: 13, lineHeight: 18 },
+  small: { color: c.textSecondary, fontSize: 12, lineHeight: 17 },
   building: { alignItems: 'center', gap: Spacing.md, paddingVertical: Spacing.xxl },
-  cardTitle: { color: Colors.text, fontSize: 18, fontWeight: '800' },
+  cardTitle: { color: c.text, fontSize: 18, fontWeight: '800' },
   badgeRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
   badge: {
     flexDirection: 'row',
@@ -349,35 +359,35 @@ const styles = StyleSheet.create({
     gap: 4,
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: Colors.accent,
+    borderColor: c.accent,
     paddingHorizontal: Spacing.sm,
     paddingVertical: 2,
   },
-  badgeText: { color: Colors.accent, fontSize: 12, fontWeight: '700' },
+  badgeText: { color: c.accent, fontSize: 12, fontWeight: '700' },
   notice: {
     flexDirection: 'row',
     gap: Spacing.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
     alignItems: 'flex-start',
   },
   day: { gap: Spacing.md },
-  nextDay: { borderWidth: 1, borderColor: Colors.accent },
-  nextLabel: { color: Colors.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
+  nextDay: { borderWidth: 1, borderColor: c.accent },
+  nextLabel: { color: c.accent, fontSize: 11, fontWeight: '800', letterSpacing: 0.5 },
   dayHeader: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  minutes: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700' },
+  minutes: { color: c.textSecondary, fontSize: 13, fontWeight: '700' },
   exercise: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
-  exerciseName: { color: Colors.text, fontSize: 15, fontWeight: '700' },
-  track: { height: 6, borderRadius: 3, backgroundColor: Colors.surfaceRaised, marginTop: Spacing.sm, overflow: 'hidden' },
-  fill: { height: 6, borderRadius: 3, backgroundColor: Colors.accent },
+  exerciseName: { color: c.text, fontSize: 15, fontWeight: '700' },
+  track: { height: 6, borderRadius: 3, backgroundColor: c.surfaceRaised, marginTop: Spacing.sm, overflow: 'hidden' },
+  fill: { height: 6, borderRadius: 3, backgroundColor: c.accent },
   play: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: Colors.accent,
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  playQuiet: { backgroundColor: Colors.surfaceRaised },
-});
+  playQuiet: { backgroundColor: c.surfaceRaised },
+}));

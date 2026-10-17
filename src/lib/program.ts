@@ -72,7 +72,7 @@ export function isCompound(name: string): boolean {
   return COMPOUND.test(name);
 }
 
-type DayType = 'full' | 'upper' | 'lower' | 'push' | 'pull' | 'legs';
+export type DayType = 'full' | 'upper' | 'lower' | 'push' | 'pull' | 'legs';
 
 /** Muscle slots in order of priority; a day takes as many as fit in the session. */
 const SLOTS: Record<DayType, string[]> = {
@@ -93,7 +93,7 @@ const DAY_TITLES: Record<DayType, { name: string; focus: string }> = {
   legs: { name: 'Legs', focus: 'Quads, hamstrings, glutes, calves' },
 };
 
-export type SplitDay = { type: DayType; name: string; focus: string; variant: number };
+export type SplitDay = { type: DayType; name: string; focus: string; variant: number; letter: string };
 
 /** The weekly split for a number of training days. */
 export function splitFor(daysPerWeek: number, experience: Experience): SplitDay[] {
@@ -116,8 +116,8 @@ export function splitFor(daysPerWeek: number, experience: Experience): SplitDay[
   return types.map((type) => {
     const variant = seen.get(type) ?? 0;
     seen.set(type, variant + 1);
-    const letter = (total.get(type) ?? 1) > 1 ? ` ${String.fromCharCode(65 + variant)}` : '';
-    return { type, variant, name: `${DAY_TITLES[type].name}${letter}`, focus: DAY_TITLES[type].focus };
+    const letter = (total.get(type) ?? 1) > 1 ? String.fromCharCode(65 + variant) : '';
+    return { type, variant, letter, name: `${DAY_TITLES[type].name} ${letter}`.trim(), focus: DAY_TITLES[type].focus };
   });
 }
 
@@ -157,7 +157,23 @@ export function programName(goal: Goal, daysPerWeek: number): string {
 const movement = (name: string) => name.replace(/^Dumbbell /, '').toLowerCase();
 
 /** A program built from the split and fixed rules: used when the AI is unavailable. */
-export function templateProgram(profile: Profile, candidates: Candidate[]): ProgramDraft {
+/** Words for a template program, so the app can name it in the user's language. English by default. */
+export type TemplateWords = {
+  day: (type: DayType, letter: string) => string;
+  focus: (type: DayType) => string;
+  name: (goal: Goal, days: number) => string;
+  summary: (days: number, perDay: number) => string;
+};
+
+const ENGLISH: TemplateWords = {
+  day: (type, letter) => `${DAY_TITLES[type].name} ${letter}`.trim(),
+  focus: (type) => DAY_TITLES[type].focus,
+  name: programName,
+  summary: (days, perDay) =>
+    `${days} days a week, ${perDay} exercises per session. Add weight when you hit the top of the rep range on every set.`,
+};
+
+export function templateProgram(profile: Profile, candidates: Candidate[], words: TemplateWords = ENGLISH): ProgramDraft {
   const perDay = exercisesPerDay(profile.sessionMinutes);
   const byMuscle = new Map<string, Candidate[]>();
   for (const c of candidates) {
@@ -186,19 +202,19 @@ export function templateProgram(profile: Profile, candidates: Candidate[]): Prog
         ...repScheme(profile.goal, profile.experience, isCompound(pick.name), exercises.length === 0),
       });
     }
-    return { name: day.name, focus: day.focus, exercises };
+    return { name: words.day(day.type, day.letter), focus: words.focus(day.type), exercises };
   });
 
   return {
-    name: programName(profile.goal, profile.daysPerWeek),
-    summary: `${days.length} days a week, ${perDay} exercises per session. Add weight when you hit the top of the rep range on every set.`,
+    name: words.name(profile.goal, profile.daysPerWeek),
+    summary: words.summary(days.length, perDay),
     weeks: 8,
     days: days.filter((d) => d.exercises.length > 0),
     source: 'template',
   };
 }
 
-export function buildProgramPrompt(profile: Profile, candidates: Candidate[], now: Date): string {
+export function buildProgramPrompt(profile: Profile, candidates: Candidate[], now: Date, language = 'English'): string {
   const split = splitFor(profile.daysPerWeek, profile.experience);
   const perDay = exercisesPerDay(profile.sessionMinutes);
   const catalog = candidates.map((c) => `${c.id}|${c.name}|${c.muscle}`).join('\n');
@@ -213,6 +229,8 @@ Each day has ${perDay} exercises (${perDay - 1} is fine if the session is tight)
 Days with the same type but a different letter use different exercises for the same muscles.
 Only use exercises from this list (id|name|muscle):
 ${catalog}
+
+Write "name", "summary" and each day's "name" and "focus" in ${language} (keep the A/B letters). Keep exercise ids as given.
 
 Rules: sets 2-5; reps as "min-max" (strength: 3-6 for main lifts; muscle: 6-12; fat loss/fitness: 8-15); rest in seconds (60-180, longer for heavy compounds). Never repeat an exercise within a day.
 
@@ -307,7 +325,8 @@ export type Suggestion = {
   weight: number | null;
   reps: number;
   kind: 'start' | 'increase' | 'repeat' | 'deload';
-  hint: string | null;
+  /** Why: a `progress.<key>` translation and its values. */
+  hint: { key: string; params: Record<string, string | number> };
 };
 
 /** Smallest sensible jump: bigger for leg and hip lifts, smaller for dumbbells. */
@@ -343,7 +362,7 @@ export function suggestNext(
       weight: null,
       reps: repMin,
       kind: 'start',
-      hint: `First time: pick a weight you can lift for ${range} reps with 1–2 reps to spare`,
+      hint: { key: 'start', params: { range } },
     };
   }
 
@@ -355,7 +374,7 @@ export function suggestNext(
   // Bodyweight: no load to add, so keep adding reps.
   if (top === 0) {
     const reps = minReps + 1;
-    return { weight: null, reps, kind: 'repeat', hint: `Aim for ${reps} reps on every set` };
+    return { weight: null, reps, kind: 'repeat', hint: { key: 'bodyweight', params: { reps } } };
   }
 
   // Only a stall at the same weight counts, so a deload doesn't trigger another one.
@@ -368,15 +387,15 @@ export function suggestNext(
         weight,
         reps: repMax,
         kind: 'deload',
-        hint: `No progress in 3 sessions: lighter today (${weight} kg) to build back up`,
+        hint: { key: 'deload', params: { weight } },
       };
     }
   }
 
   if (minReps >= repMax) {
     const weight = top + increment;
-    return { weight, reps: repMin, kind: 'increase', hint: `You hit ${repMax} reps on every set: +${increment} kg today` };
+    return { weight, reps: repMin, kind: 'increase', hint: { key: 'increase', params: { reps: repMax, increment } } };
   }
   const reps = Math.min(repMax, Math.max(repMin, minReps + 1));
-  return { weight: top, reps, kind: 'repeat', hint: `Same weight, aim for ${reps} reps on every set` };
+  return { weight: top, reps, kind: 'repeat', hint: { key: 'repeat', params: { reps } } };
 }

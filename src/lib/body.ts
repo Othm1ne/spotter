@@ -48,7 +48,14 @@ const TARGET_RATE: Record<Goal, [number, number]> = {
   build_muscle: [0.1, 0.5],
 };
 
-export type CheckIn = { kind: 'on_track' | 'increase' | 'decrease'; message: string; delta: number };
+/** `reason` picks the translated message; `message` is the English text for the AI coach. */
+export type CheckIn = {
+  kind: 'on_track' | 'increase' | 'decrease';
+  reason: 'gain_slow' | 'lose_fast' | 'lose_slow' | 'gain_fast' | 'on_track';
+  change: string;
+  message: string;
+  delta: number;
+};
 
 /** Compares the actual trend with the goal's healthy range and suggests a calorie change. */
 export function calorieCheckIn(goal: Goal, rate: { percentPerWeek: number; kgPerWeek: number }): CheckIn {
@@ -56,24 +63,30 @@ export function calorieCheckIn(goal: Goal, rate: { percentPerWeek: number; kgPer
   const kg = Math.round(rate.kgPerWeek * 100) / 100 || 0; // `|| 0` turns -0 into 0
   const change = `${kg > 0 ? '+' : ''}${kg.toFixed(2)} kg/week`;
   if (rate.percentPerWeek < min) {
+    const gaining = goal === 'build_muscle' || goal === 'strength';
     return {
       kind: 'increase',
+      reason: gaining ? 'gain_slow' : 'lose_fast',
+      change,
       delta: ADJUST_STEP,
       message:
-        goal === 'build_muscle' || goal === 'strength'
+        gaining
           ? `Your weight isn't going up yet (${change}). Eating ${ADJUST_STEP} kcal more fuels muscle growth.`
           : `You're losing weight faster than planned (${change}). Eating ${ADJUST_STEP} kcal more protects your muscle and energy.`,
     };
   }
   if (rate.percentPerWeek > max) {
+    const losing = goal === 'lose_fat' || goal === 'recomp';
     return {
       kind: 'decrease',
+      reason: losing ? 'lose_slow' : 'gain_fast',
+      change,
       delta: -ADJUST_STEP,
       message:
-        goal === 'lose_fat' || goal === 'recomp'
+        losing
           ? `Your weight isn't dropping yet (${change}). Eating ${ADJUST_STEP} kcal less should get it moving.`
           : `You're gaining faster than planned (${change}). Eating ${ADJUST_STEP} kcal less keeps the gain lean.`,
     };
   }
-  return { kind: 'on_track', delta: 0, message: `Right on track: ${change}. Keep doing what you're doing.` };
+  return { kind: 'on_track', reason: 'on_track', change, delta: 0, message: `Right on track: ${change}. Keep doing what you're doing.` };
 }

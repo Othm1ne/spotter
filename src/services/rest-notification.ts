@@ -1,5 +1,7 @@
 import * as Notifications from 'expo-notifications';
 
+import { currentLanguage, t } from '@/i18n';
+
 import { ensureNotificationPermission } from './reminders';
 
 /** The "resting until…" notice shown right away, and the alert when rest is over. */
@@ -16,21 +18,21 @@ export function getRestEndsAt() {
   return rest.endsAt;
 }
 
-const clock = (time: number) => new Date(time).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+const clock = (time: number) => new Date(time).toLocaleTimeString(currentLanguage(), { hour: '2-digit', minute: '2-digit' });
 
 /** Shows "resting until" now (on the lock screen, no banner in the app) and schedules the end alert. */
 async function notify(endsAt: number, next: string | null) {
   const seconds = Math.round((endsAt - Date.now()) / 1000);
   if (seconds <= 0 || !(await ensureNotificationPermission())) return;
-  const nextLine = next ? `Next: ${next}` : 'Get ready for your next set';
+  const nextLine = next ? t('notify.restNext', { next }) : t('notify.restReady');
   await Notifications.scheduleNotificationAsync({
     identifier: STATUS_ID,
-    content: { title: `Resting until ${clock(endsAt)}`, body: nextLine, sound: false, data: { url: '/workout', kind: 'rest-status' } },
+    content: { title: t('notify.restUntil', { time: clock(endsAt) }), body: nextLine, sound: false, data: { url: '/workout', kind: 'rest-status' } },
     trigger: null,
   });
   await Notifications.scheduleNotificationAsync({
     identifier: END_ID,
-    content: { title: 'Rest is over 💪', body: nextLine, sound: true, data: { url: '/workout' } },
+    content: { title: t('notify.restOver'), body: nextLine, sound: true, data: { url: '/workout' } },
     trigger: { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds },
   });
 }

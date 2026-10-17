@@ -3,10 +3,12 @@ import * as Haptics from 'expo-haptics';
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Pressable, Text, View } from 'react-native';
 
+import { useT, useI18n } from '@/i18n';
 import { Empty } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import {
   deleteConversation,
   getActiveConversation,
@@ -17,6 +19,10 @@ import {
 
 /** Past coach conversations. Tap to reopen one, hold to delete it. */
 export default function CoachHistoryScreen() {
+  const { locale } = useI18n();
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<number | null>(null);
@@ -38,15 +44,15 @@ export default function CoachHistoryScreen() {
     router.back();
   }
 
-  function onDelete(c: Conversation) {
-    Alert.alert('Delete this chat?', c.title, [
-      { text: 'Cancel', style: 'cancel' },
+  function onDelete(chat: Conversation) {
+    Alert.alert(t('chats.deleteTitle'), chat.title, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
-          await deleteConversation(db, c.id);
-          if (c.id === active) await setActiveConversation(db, null);
+          await deleteConversation(db, chat.id);
+          if (chat.id === active) await setActiveConversation(db, null);
           load();
         },
       },
@@ -57,15 +63,15 @@ export default function CoachHistoryScreen() {
     <FlatList
       style={styles.screen}
       data={conversations}
-      keyExtractor={(c) => String(c.id)}
+      keyExtractor={(chat) => String(chat.id)}
       contentContainerStyle={styles.list}
       ListHeaderComponent={
         <Pressable onPress={() => open(null)} style={({ pressed }) => [styles.newChat, pressed && { opacity: 0.8 }]}>
-          <Ionicons name="add" size={22} color={Colors.accentText} />
-          <Text style={styles.newChatText}>New chat</Text>
+          <Ionicons name="add" size={22} color={c.accentText} />
+          <Text style={styles.newChatText}>{t('coach.newChat')}</Text>
         </Pressable>
       }
-      ListEmptyComponent={<Empty title="No chats yet" body="Your conversations with the coach are saved here." />}
+      ListEmptyComponent={<Empty title={t('chats.emptyTitle')} body={t('chats.emptyBody')} />}
       renderItem={({ item }) => (
         <Pressable
           onPress={() => open(item.id)}
@@ -81,55 +87,55 @@ export default function CoachHistoryScreen() {
               </Text>
             ) : null}
             <Text style={styles.meta}>
-              {formatWhen(item.updated_at)} · {item.message_count} message{item.message_count === 1 ? '' : 's'}
+              {formatWhen(item.updated_at, locale)} · {t('chats.messages', { count: item.message_count })}
             </Text>
           </View>
-          <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+          <Ionicons name="chevron-forward" size={18} color={c.textSecondary} />
         </Pressable>
       )}
       ListFooterComponent={
-        conversations.length > 0 ? <Text style={styles.hint}>Hold a chat to delete it.</Text> : null
+        conversations.length > 0 ? <Text style={styles.hint}>{t('chats.hint')}</Text> : null
       }
     />
   );
 }
 
-function formatWhen(time: number) {
+function formatWhen(time: number, locale: string) {
   const date = new Date(time);
   const today = new Date();
   if (date.toDateString() === today.toDateString()) {
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  return date.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   list: { padding: Spacing.lg, gap: Spacing.sm, paddingBottom: 60 },
   newChat: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.accent,
+    backgroundColor: c.accent,
     borderRadius: Radius.md,
     height: 52,
     marginBottom: Spacing.sm,
   },
-  newChatText: { color: Colors.accentText, fontSize: 16, fontWeight: '800' },
+  newChatText: { color: c.accentText, fontSize: 16, fontWeight: '800' },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: Radius.lg,
     padding: Spacing.lg,
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  rowActive: { borderColor: Colors.accent },
-  title: { color: Colors.text, fontSize: 16, fontWeight: '700' },
-  preview: { color: Colors.textSecondary, fontSize: 14, lineHeight: 19 },
-  meta: { color: Colors.textSecondary, fontSize: 12 },
-  hint: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: Spacing.md },
-});
+  rowActive: { borderColor: c.accent },
+  title: { color: c.text, fontSize: 16, fontWeight: '700' },
+  preview: { color: c.textSecondary, fontSize: 14, lineHeight: 19 },
+  meta: { color: c.textSecondary, fontSize: 12 },
+  hint: { color: c.textSecondary, fontSize: 13, textAlign: 'center', marginTop: Spacing.md },
+}));

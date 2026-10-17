@@ -1,10 +1,12 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
+import { useT, useI18n } from '@/i18n';
 import { Button, Card } from '@/components/ui';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { makeStyles } from '@/theme';
 import { routineFromWorkout } from '@/db/routines';
 import {
   deleteWorkout,
@@ -17,6 +19,9 @@ import {
 import { estimateOneRepMax, formatDuration, formatVolume, formatWeight, setVolume } from '@/lib/workout-math';
 
 export default function WorkoutDetailScreen() {
+  const { locale } = useI18n();
+  const t = useT();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [workout, setWorkout] = useState<Workout | null>(null);
@@ -51,23 +56,23 @@ export default function WorkoutDetailScreen() {
 
   function onEditDuration() {
     const options = [30, 45, 60, 75, 90, 120];
-    Alert.alert('How long did it last?', 'Fix the duration if you forgot to finish the workout.', [
+    Alert.alert(t('history.durationTitle'), t('history.durationBody'), [
       ...options.map((minutes) => ({
-        text: minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60}` : ''}`,
+        text: formatDuration(minutes * 60),
         onPress: async () => {
           await setWorkoutDuration(db, workout!.id, minutes);
           setWorkout(await getWorkout(db, workout!.id));
         },
       })),
-      { text: 'Cancel', style: 'cancel' as const },
+      { text: t('common.cancel'), style: 'cancel' as const },
     ]);
   }
 
   function onDelete() {
-    Alert.alert('Delete workout?', 'This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('history.deleteTitle'), t('settings.cannotUndo'), [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('common.delete'),
         style: 'destructive',
         onPress: async () => {
           await deleteWorkout(db, workout!.id);
@@ -81,7 +86,7 @@ export default function WorkoutDetailScreen() {
     <ScrollView contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: workout.name }} />
       <Text style={styles.date}>
-        {new Date(workout.started_at).toLocaleString(undefined, {
+        {new Date(workout.started_at).toLocaleString(locale, {
           weekday: 'long',
           day: 'numeric',
           month: 'long',
@@ -90,9 +95,9 @@ export default function WorkoutDetailScreen() {
         })}
       </Text>
       <View style={styles.stats}>
-        <Summary value={formatDuration(duration)} label="Duration ✎" onPress={onEditDuration} />
-        <Summary value={String(sets.length)} label="Sets" />
-        <Summary value={formatVolume(volume)} label="Volume" />
+        <Summary value={formatDuration(duration)} label={t('history.durationEdit')} onPress={onEditDuration} />
+        <Summary value={String(sets.length)} label={t('history.sets')} />
+        <Summary value={formatVolume(volume)} label={t('history.volume')} />
       </View>
 
       {blocks.map((block, i) => {
@@ -108,18 +113,19 @@ export default function WorkoutDetailScreen() {
                 </Text>
               </View>
             ))}
-            {best > 0 && <Text style={styles.e1rm}>Best est. 1RM: {formatWeight(Math.round(best * 10) / 10)} kg</Text>}
+            {best > 0 && <Text style={styles.e1rm}>{t('history.bestE1rm', { kg: formatWeight(Math.round(best * 10) / 10) })}</Text>}
           </Card>
         );
       })}
 
-      <Button label="Save as workout plan" variant="secondary" onPress={onSaveAsRoutine} />
-      <Button label="Delete workout" variant="danger" onPress={onDelete} />
+      <Button label={t('history.saveAsPlan')} variant="secondary" onPress={onSaveAsRoutine} />
+      <Button label={t('routine.delete')} variant="danger" onPress={onDelete} />
     </ScrollView>
   );
 }
 
 function Summary({ value, label, onPress }: { value: string; label: string; onPress?: () => void }) {
+  const styles = useStyles();
   return (
     <Pressable onPress={onPress} disabled={!onPress} style={{ flex: 1 }}>
       <Card style={styles.summary}>
@@ -132,15 +138,15 @@ function Summary({ value, label, onPress }: { value: string; label: string; onPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 60 },
-  date: { color: Colors.textSecondary, fontSize: 14 },
+  date: { color: c.textSecondary, fontSize: 14 },
   stats: { flexDirection: 'row', gap: Spacing.sm },
   summary: { alignItems: 'center', paddingHorizontal: Spacing.sm },
-  summaryValue: { color: Colors.text, fontSize: 20, fontWeight: '800' },
-  exercise: { color: Colors.accent, fontSize: 17, fontWeight: '700' },
+  summaryValue: { color: c.text, fontSize: 20, fontWeight: '800' },
+  exercise: { color: c.accent, fontSize: 17, fontWeight: '700' },
   setRow: { flexDirection: 'row', gap: Spacing.md },
-  setIndex: { color: Colors.textSecondary, width: 20, fontWeight: '700' },
-  setText: { color: Colors.text, fontSize: 15 },
-  e1rm: { color: Colors.textSecondary, fontSize: 13, marginTop: Spacing.xs },
-});
+  setIndex: { color: c.textSecondary, width: 20, fontWeight: '700' },
+  setText: { color: c.text, fontSize: 15 },
+  e1rm: { color: c.textSecondary, fontSize: 13, marginTop: Spacing.xs },
+}));

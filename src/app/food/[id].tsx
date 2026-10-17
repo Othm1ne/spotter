@@ -3,13 +3,15 @@ import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { useT } from '@/i18n';
 import { Chip } from '@/components/option-card';
 import { Button, Card } from '@/components/ui';
-import { Colors, Macros, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { deleteEntry, getEntry, getFood, logFood, setFavorite, updateEntry, type Food, type FoodEntry } from '@/db/food';
-import { MEALS, mealForTime, mealTitle, scale, type Meal } from '@/lib/food';
+import { MEALS, mealForTime, scale, type Meal } from '@/lib/food';
 import { dayKey } from '@/lib/stats';
 import { formatWeight, parseNumber } from '@/lib/workout-math';
 
@@ -17,6 +19,9 @@ const COMMON_GRAMS = [50, 100, 150, 200, 250];
 
 /** Choose how much you ate of a food, see its calories and macros, and log it (or edit a logged entry). */
 export default function FoodPortionScreen() {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const params = useLocalSearchParams<{ id: string; day?: string; meal?: Meal; entryId?: string }>();
   const [food, setFood] = useState<Food | null>(null);
@@ -46,9 +51,9 @@ export default function FoodPortionScreen() {
   const grams = parseNumber(gramsText) ?? 0;
   const n = scale(food, grams);
   const shortcuts = [
-    ...(food.last_grams ? [{ label: `Last time · ${formatWeight(food.last_grams)} g`, grams: food.last_grams }] : []),
+    ...(food.last_grams ? [{ label: t('portion.lastTime', { grams: formatWeight(food.last_grams) }), grams: food.last_grams }] : []),
     ...(food.serving_g && food.serving_g !== food.last_grams
-      ? [{ label: `1 serving · ${formatWeight(food.serving_g)} g`, grams: food.serving_g }]
+      ? [{ label: t('portion.serving', { grams: formatWeight(food.serving_g) }), grams: food.serving_g }]
       : []),
     ...COMMON_GRAMS.filter((g) => g !== food.last_grams && g !== food.serving_g).map((g) => ({ label: `${g} g`, grams: g })),
   ];
@@ -70,10 +75,10 @@ export default function FoodPortionScreen() {
 
   function onDelete() {
     if (!entry) return;
-    Alert.alert('Remove from your log?', food?.name, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert(t('portion.removeTitle'), food?.name, [
+      { text: t('common.cancel'), style: 'cancel' },
       {
-        text: 'Remove',
+        text: t('portion.remove'),
         style: 'destructive',
         onPress: async () => {
           await deleteEntry(db, entry.id);
@@ -87,10 +92,10 @@ export default function FoodPortionScreen() {
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <Stack.Screen
         options={{
-          title: entry ? 'Edit food' : 'Add food',
+          title: entry ? t('portion.editTitle') : t('screens.addFood'),
           headerRight: () => (
-            <Pressable onPress={toggleFavorite} hitSlop={10} accessibilityLabel={food.favorite ? 'Remove from favorites' : 'Add to favorites'}>
-              <Ionicons name={food.favorite ? 'star' : 'star-outline'} size={24} color={Colors.accent} />
+            <Pressable onPress={toggleFavorite} hitSlop={10} accessibilityLabel={food.favorite ? t('portion.unfavorite') : t('portion.favorite')}>
+              <Ionicons name={food.favorite ? 'star' : 'star-outline'} size={24} color={c.accent} />
             </Pressable>
           ),
         }}
@@ -100,13 +105,16 @@ export default function FoodPortionScreen() {
           <Text style={styles.name}>{food.name}</Text>
           <Text style={styles.muted}>
             {food.brand ? `${food.brand} · ` : ''}
-            {food.source === 'ai' ? 'AI estimate · ' : ''}per 100 g: {Math.round(food.kcal)} kcal · P {food.protein.toFixed(1)} · C{' '}
-            {food.carbs.toFixed(1)} · F {food.fat.toFixed(1)}
+            {food.source === 'ai' ? `${t('portion.aiEstimate')} · ` : ''}
+            {t('portion.per100', {
+              kcal: Math.round(food.kcal),
+              macros: t('macros.short', { p: food.protein.toFixed(1), c: food.carbs.toFixed(1), f: food.fat.toFixed(1) }),
+            })}
           </Text>
         </View>
 
         <Card style={styles.amount}>
-          <Text style={styles.label}>AMOUNT</Text>
+          <Text style={styles.label}>{t('portion.amount')}</Text>
           <View style={styles.gramsRow}>
             <TextInput
               value={gramsText}
@@ -114,7 +122,7 @@ export default function FoodPortionScreen() {
               keyboardType="decimal-pad"
               selectTextOnFocus
               style={styles.gramsInput}
-              accessibilityLabel="Grams"
+              accessibilityLabel={t('portion.grams')}
             />
             <Text style={styles.unit}>g</Text>
           </View>
@@ -131,31 +139,32 @@ export default function FoodPortionScreen() {
             <Text style={styles.kcalUnit}>kcal</Text>
           </View>
           <View style={styles.macros}>
-            <Macro label="Protein" grams={n.protein} color={Macros.protein} />
-            <Macro label="Carbs" grams={n.carbs} color={Macros.carbs} />
-            <Macro label="Fat" grams={n.fat} color={Macros.fat} />
+            <Macro label={t('macros.protein')} grams={n.protein} color={c.macros.protein} />
+            <Macro label={t('macros.carbs')} grams={n.carbs} color={c.macros.carbs} />
+            <Macro label={t('macros.fat')} grams={n.fat} color={c.macros.fat} />
           </View>
         </Card>
 
-        <Text style={styles.label}>MEAL</Text>
+        <Text style={styles.label}>{t('portion.meal')}</Text>
         <View style={styles.mealChips}>
           {MEALS.map((m) => (
-            <Chip key={m.value} label={m.title} selected={meal === m.value} onPress={() => setMeal(m.value)} />
+            <Chip key={m.value} label={t(`meals.${m.value}`)} selected={meal === m.value} onPress={() => setMeal(m.value)} />
           ))}
         </View>
 
         <Button
-          label={entry ? 'Save changes' : `Add to ${mealTitle(meal)} · ${Math.round(n.kcal)} kcal`}
+          label={entry ? t('portion.saveChanges') : t('portion.addTo', { meal: t(`meals.${meal}`), kcal: Math.round(n.kcal) })}
           onPress={onSave}
           disabled={grams <= 0}
         />
-        {entry && <Button label="Remove from log" variant="danger" onPress={onDelete} />}
+        {entry && <Button label={t('portion.removeFromLog')} variant="danger" onPress={onDelete} />}
       </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 function Macro({ label, grams, color }: { label: string; grams: number; color: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.macro}>
       <View style={[styles.dot, { backgroundColor: color }]} />
@@ -165,34 +174,34 @@ function Macro({ label, grams, color }: { label: string; grams: number; color: s
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 60 },
-  name: { color: Colors.text, fontSize: 24, fontWeight: '800' },
-  muted: { color: Colors.textSecondary, fontSize: 13, marginTop: 2 },
-  label: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
+  name: { color: c.text, fontSize: 24, fontWeight: '800' },
+  muted: { color: c.textSecondary, fontSize: 13, marginTop: 2 },
+  label: { color: c.textSecondary, fontSize: 12, fontWeight: '700', letterSpacing: 0.5 },
   amount: { gap: Spacing.md },
   gramsRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: Spacing.xs },
   gramsInput: {
-    color: Colors.text,
+    color: c.text,
     fontSize: 48,
     fontWeight: '800',
     minWidth: 120,
     textAlign: 'center',
     fontVariant: ['tabular-nums'],
     borderBottomWidth: 2,
-    borderBottomColor: Colors.accent,
+    borderBottomColor: c.accent,
     paddingVertical: 0,
   },
-  unit: { color: Colors.textSecondary, fontSize: 22, fontWeight: '700' },
+  unit: { color: c.textSecondary, fontSize: 22, fontWeight: '700' },
   chips: { gap: Spacing.sm },
   nutrition: { gap: Spacing.lg },
   kcalRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', gap: Spacing.sm },
-  kcal: { color: Colors.text, fontSize: 44, fontWeight: '800', fontVariant: ['tabular-nums'] },
-  kcalUnit: { color: Colors.textSecondary, fontSize: 18, fontWeight: '700' },
+  kcal: { color: c.text, fontSize: 44, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  kcalUnit: { color: c.textSecondary, fontSize: 18, fontWeight: '700' },
   macros: { flexDirection: 'row', justifyContent: 'space-around' },
   macro: { alignItems: 'center' },
   dot: { width: 10, height: 10, borderRadius: 5, marginBottom: 6 },
-  macroValue: { color: Colors.text, fontSize: 18, fontWeight: '800' },
+  macroValue: { color: c.text, fontSize: 18, fontWeight: '800' },
   mealChips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
-});
+}));

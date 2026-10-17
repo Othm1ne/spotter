@@ -12,11 +12,10 @@ export type AchievementInput = {
   nightOwl: boolean;
 };
 
+/** Title and description are translations: `achievements.<id>.title` / `.description`. */
 export type Achievement = {
   id: string;
   emoji: string;
-  title: string;
-  description: string;
   value: number;
   target: number;
   unlocked: boolean;
@@ -27,13 +26,11 @@ type Definition = Omit<Achievement, 'value' | 'unlocked'> & { measure: (s: Achie
 function tiers(
   id: string,
   measure: (s: AchievementInput) => number,
-  levels: [target: number, emoji: string, title: string, description: string][]
+  levels: [target: number, emoji: string][]
 ): Definition[] {
-  return levels.map(([target, emoji, title, description]) => ({
+  return levels.map(([target, emoji]) => ({
     id: `${id}-${target}`,
     emoji,
-    title,
-    description,
     target,
     measure,
   }));
@@ -41,42 +38,42 @@ function tiers(
 
 const DEFINITIONS: Definition[] = [
   ...tiers('workouts', (s) => s.workouts, [
-    [1, '🏁', 'First rep', 'Finish your first workout'],
-    [10, '💪', 'Regular', 'Finish 10 workouts'],
-    [50, '🏋️', 'Committed', 'Finish 50 workouts'],
-    [100, '💯', 'Centurion', 'Finish 100 workouts'],
-    [250, '👑', 'Gym legend', 'Finish 250 workouts'],
+    [1, '🏁'],
+    [10, '💪'],
+    [50, '🏋️'],
+    [100, '💯'],
+    [250, '👑'],
   ]),
   ...tiers('day-streak', (s) => s.longestDayStreak, [
-    [3, '🔥', 'On fire', 'Train 3 days in a row'],
-    [7, '☄️', 'Unstoppable', 'Train 7 days in a row'],
+    [3, '🔥'],
+    [7, '☄️'],
   ]),
   ...tiers('week-streak', (s) => s.longestWeekStreak, [
-    [4, '🎯', 'Goal getter', 'Hit your weekly goal 4 weeks in a row'],
-    [12, '📅', 'Habit built', 'Hit your weekly goal 12 weeks in a row'],
-    [26, '🗓️', 'Half a year strong', 'Hit your weekly goal 26 weeks in a row'],
+    [4, '🎯'],
+    [12, '📅'],
+    [26, '🗓️'],
   ]),
   ...tiers('sets', (s) => s.sets, [
-    [100, '✅', 'Hundred sets', 'Complete 100 sets'],
-    [500, '📈', 'Set machine', 'Complete 500 sets'],
-    [1000, '🚀', 'Thousand club', 'Complete 1,000 sets'],
+    [100, '✅'],
+    [500, '📈'],
+    [1000, '🚀'],
   ]),
   ...tiers('volume', (s) => s.volume, [
-    [10_000, '🧱', 'Ten tonner', 'Lift 10 tonnes in total'],
-    [100_000, '🏗️', 'Heavy hauler', 'Lift 100 tonnes in total'],
-    [1_000_000, '⛰️', 'Mountain mover', 'Lift 1,000 tonnes in total'],
+    [10_000, '🧱'],
+    [100_000, '🏗️'],
+    [1_000_000, '⛰️'],
   ]),
   ...tiers('heaviest', (s) => s.heaviestWeight, [
-    [100, '🥇', 'Triple digits', 'Lift 100 kg in any exercise'],
-    [150, '🦍', 'Heavyweight', 'Lift 150 kg in any exercise'],
-    [200, '🐘', 'Two hundred', 'Lift 200 kg in any exercise'],
+    [100, '🥇'],
+    [150, '🦍'],
+    [200, '🐘'],
   ]),
   ...tiers('variety', (s) => s.exercisesTried, [
-    [10, '🧭', 'Explorer', 'Try 10 different exercises'],
-    [25, '🌈', 'Well rounded', 'Try 25 different exercises'],
+    [10, '🧭'],
+    [25, '🌈'],
   ]),
-  ...tiers('early', (s) => (s.earlyBird ? 1 : 0), [[1, '🌅', 'Early bird', 'Start a workout before 7 am']]),
-  ...tiers('night', (s) => (s.nightOwl ? 1 : 0), [[1, '🦉', 'Night owl', 'Start a workout after 9 pm']]),
+  ...tiers('early', (s) => (s.earlyBird ? 1 : 0), [[1, '🌅']]),
+  ...tiers('night', (s) => (s.nightOwl ? 1 : 0), [[1, '🦉']]),
 ];
 
 export function computeAchievements(input: AchievementInput): Achievement[] {

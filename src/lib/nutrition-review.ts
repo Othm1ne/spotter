@@ -45,16 +45,20 @@ export function weekStats(days: DayIntake[], targets: Targets, waterMl: number[]
 }
 
 /** One line for the Nutrition tab, no AI needed. */
-export function quickInsight(stats: WeekStats, targets: Targets): string {
-  if (stats.daysLogged < 2) return 'Log food on a few days to get your weekly review.';
+/** One line for the Nutrition tab, no AI needed: an `insight.<key>` translation and its values. */
+export function quickInsight(stats: WeekStats, targets: Targets): { key: string; params: Record<string, number> } {
+  if (stats.daysLogged < 2) return { key: 'notEnough', params: {} };
   const kcalGap = stats.avgKcal - targets.calories;
   if (stats.proteinDays < Math.ceil(stats.daysLogged / 2)) {
-    return `Protein hit on ${stats.proteinDays} of ${stats.daysLogged} days: averaging ${stats.avgProtein} g of ${targets.protein} g.`;
+    return {
+      key: 'protein',
+      params: { hit: stats.proteinDays, days: stats.daysLogged, avg: stats.avgProtein, target: targets.protein },
+    };
   }
   if (Math.abs(kcalGap) > targets.calories * 0.1) {
-    return `Averaging ${stats.avgKcal.toLocaleString()} kcal, ${Math.abs(Math.round(kcalGap))} ${kcalGap > 0 ? 'over' : 'under'} your target.`;
+    return { key: kcalGap > 0 ? 'over' : 'under', params: { avg: stats.avgKcal, gap: Math.abs(Math.round(kcalGap)) } };
   }
-  return `On target ${stats.onTargetDays} of ${stats.daysLogged} days, protein ${stats.proteinDays} of ${stats.daysLogged}. Nice work.`;
+  return { key: 'good', params: { onTarget: stats.onTargetDays, protein: stats.proteinDays, days: stats.daysLogged } };
 }
 
 /** Changes whenever the log changes, so a cached review is only reused for the same food. */
@@ -74,7 +78,14 @@ function profileLine(profile: Profile, targets: Targets) {
   return `Goal: ${goalTitle(profile.goal)}. ${profile.sex}, ${profile.weightKg} kg. Daily targets: ${targets.calories} kcal, protein ${targets.protein} g, carbs ${targets.carbs} g, fat ${targets.fat} g, water ${(targets.waterMl / 1000).toFixed(1)} L.`;
 }
 
-export function dayReviewPrompt(profile: Profile, targets: Targets, items: MealItem[], waterMl: number, hour: number): string {
+export function dayReviewPrompt(
+  profile: Profile,
+  targets: Targets,
+  items: MealItem[],
+  waterMl: number,
+  hour: number,
+  language = 'English'
+): string {
   const t = items.reduce(
     (s, i) => ({ kcal: s.kcal + i.kcal, protein: s.protein + i.protein }),
     { kcal: 0, protein: 0 }
@@ -90,6 +101,7 @@ Foods:
 ${list || '- nothing logged yet'}
 
 ${SHAPE}
+Write every text in ${language}.
 "ideas" must fit the calories and protein left.`;
 }
 
@@ -98,7 +110,8 @@ export function weekReviewPrompt(
   targets: Targets,
   stats: WeekStats,
   days: DayIntake[],
-  top: TopFood[]
+  top: TopFood[],
+  language = 'English'
 ): string {
   const perDay = days
     .filter((d) => d.entries >= MIN_ENTRIES)
@@ -114,6 +127,7 @@ Foods that gave the most calories:
 ${foods}
 
 ${SHAPE}
+Write every text in ${language}.
 "ideas" should be easy swaps or additions based on the foods they already eat.`;
 }
 

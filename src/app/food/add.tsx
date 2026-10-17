@@ -9,17 +9,18 @@ import {
   Platform,
   Pressable,
   ScrollView,
-  StyleSheet,
   Text,
   TextInput,
   View,
 } from 'react-native';
 
+import { useT } from '@/i18n';
 import { BarcodeScanner } from '@/components/barcode-scanner';
 import { Chip } from '@/components/option-card';
 import { Segmented } from '@/components/segmented';
 import { Button } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import {
   getFood,
   getFoodByBarcode,
@@ -42,6 +43,9 @@ type Mode = (typeof MODES)[number];
 const defaultGrams = (f: Food) => f.last_grams ?? f.serving_g ?? 100;
 
 export default function AddFoodScreen() {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const params = useLocalSearchParams<{ day?: string; meal?: Meal }>();
   const day = params.day!;
@@ -132,7 +136,7 @@ export default function AddFoodScreen() {
   async function quickAdd(food: Food) {
     await logFood(db, food, defaultGrams(food), day, meal);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setJustAdded(`${food.name} added`);
+    setJustAdded(t('addFood.added', { name: food.name }));
     setTimeout(() => setJustAdded(null), 1800);
     getSuggestions(db, meal).then(setSuggestions);
   }
@@ -143,7 +147,7 @@ export default function AddFoodScreen() {
     setError(null);
     try {
       const items = await estimateMeal(description.trim());
-      if (items.length === 0) setError("Couldn't recognise any food in that. Try naming the foods and amounts.");
+      if (items.length === 0) setError(t('addFood.notRecognised'));
       setEstimate(items.map((i) => ({ ...i, keep: true, gramsText: String(Math.round(i.grams)) })));
     } catch (e) {
       setError(aiErrorMessage(e));
@@ -175,7 +179,7 @@ export default function AddFoodScreen() {
     if (kcal === null) return;
     await logQuick(
       db,
-      quick.name.trim() || 'Quick add',
+      quick.name.trim() || t('addFood.quickName'),
       { kcal, protein: parseNumber(quick.protein) ?? 0, carbs: parseNumber(quick.carbs) ?? 0, fat: parseNumber(quick.fat) ?? 0 },
       day,
       meal
@@ -189,16 +193,17 @@ export default function AddFoodScreen() {
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <Stack.Screen options={{ title: 'Add food' }} />
+      <Stack.Screen options={{ title: t('screens.addFood') }} />
       <View style={styles.top}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.meals}>
           {MEALS.map((m) => (
-            <Chip key={m.value} label={m.title} selected={meal === m.value} onPress={() => setMeal(m.value)} />
+            <Chip key={m.value} label={t(`meals.${m.value}`)} selected={meal === m.value} onPress={() => setMeal(m.value)} />
           ))}
         </ScrollView>
         <View style={{ alignItems: 'center' }}>
           <Segmented
             options={MODES}
+            format={(m) => t(`addFood.mode.${m}`)}
             value={mode}
             onChange={(m) => {
               setError(null);
@@ -211,7 +216,7 @@ export default function AddFoodScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         {error && (
           <View style={styles.error}>
-            <Ionicons name="alert-circle" size={18} color={Colors.warning} />
+            <Ionicons name="alert-circle" size={18} color={c.warning} />
             <Text style={styles.errorText}>{error}</Text>
           </View>
         )}
@@ -219,13 +224,13 @@ export default function AddFoodScreen() {
         {mode === 'Search' && (
           <>
             <View style={styles.searchRow}>
-              <Ionicons name="search" size={18} color={Colors.textSecondary} />
+              <Ionicons name="search" size={18} color={c.textSecondary} />
               <TextInput
                 value={query}
                 onChangeText={onQueryChange}
                 onSubmitEditing={searchOnline}
-                placeholder="Search foods, e.g. skyr, oats"
-                placeholderTextColor={Colors.textSecondary}
+                placeholder={t('addFood.searchPlaceholder')}
+                placeholderTextColor={c.textSecondary}
                 style={styles.searchInput}
                 returnKeyType="search"
                 autoCorrect={false}
@@ -235,30 +240,30 @@ export default function AddFoodScreen() {
 
             {query.trim().length < 2 ? (
               <>
-                <FoodSection title={`Your usual ${MEALS.find((m) => m.value === meal)?.title.toLowerCase()}`} foods={suggestions.usual} day={day} meal={meal} onQuickAdd={quickAdd} />
-                <FoodSection title="Favorites" foods={suggestions.favorites} day={day} meal={meal} onQuickAdd={quickAdd} />
-                <FoodSection title="Recent" foods={suggestions.recent} day={day} meal={meal} onQuickAdd={quickAdd} />
+                <FoodSection
+                  title={t('addFood.usual', { meal: t(`meals.${meal}`).toLowerCase() })} foods={suggestions.usual} day={day} meal={meal} onQuickAdd={quickAdd} />
+                <FoodSection title={t('addFood.favorites')} foods={suggestions.favorites} day={day} meal={meal} onQuickAdd={quickAdd} />
+                <FoodSection title={t('addFood.recent')} foods={suggestions.recent} day={day} meal={meal} onQuickAdd={quickAdd} />
                 {suggestions.recent.length === 0 && (
                   <Text style={styles.empty}>
-                    Search a product, scan its barcode, or describe your meal and the AI will estimate it. Foods you add
-                    show up here for one-tap logging.
+                    {t('addFood.emptyHint')}
                   </Text>
                 )}
               </>
             ) : (
               <>
-                <FoodSection title="On your phone" foods={saved} day={day} meal={meal} onQuickAdd={quickAdd} />
+                <FoodSection title={t('addFood.onPhone')} foods={saved} day={day} meal={meal} onQuickAdd={quickAdd} />
                 {online === null ? (
                   <Button
-                    label={searching ? 'Searching…' : `Search “${query.trim()}” online`}
+                    label={searching ? t('addFood.searching') : t('addFood.searchOnline', { query: query.trim() })}
                     variant="secondary"
                     onPress={searchOnline}
                     disabled={searching}
                   />
                 ) : (
                   <>
-                    <Text style={styles.section}>Online results</Text>
-                    {online.length === 0 && <Text style={styles.empty}>No products found.</Text>}
+                    <Text style={styles.section}>{t('addFood.onlineResults')}</Text>
+                    {online.length === 0 && <Text style={styles.empty}>{t('addFood.noProducts')}</Text>}
                     {online.map((f, i) => (
                       <Pressable key={`${f.barcode}-${i}`} onPress={() => openOnline(f)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
                         <View style={{ flex: 1 }}>
@@ -267,10 +272,10 @@ export default function AddFoodScreen() {
                           </Text>
                           <Text style={styles.muted} numberOfLines={1}>
                             {f.brand ? `${f.brand} · ` : ''}
-                            {Math.round(f.kcal)} kcal · P {f.protein.toFixed(1)} per 100 g
+                            {t('addFood.onlineLine', { kcal: Math.round(f.kcal), protein: f.protein.toFixed(1) })}
                           </Text>
                         </View>
-                        <Ionicons name="chevron-forward" size={18} color={Colors.textSecondary} />
+                        <Ionicons name="chevron-forward" size={18} color={c.textSecondary} />
                       </Pressable>
                     ))}
                   </>
@@ -281,8 +286,8 @@ export default function AddFoodScreen() {
                     setMode('Describe');
                   }}
                   style={styles.aiHint}>
-                  <Ionicons name="sparkles" size={16} color={Colors.accent} />
-                  <Text style={styles.aiHintText}>Not a packaged product? Let AI estimate “{query.trim()}”</Text>
+                  <Ionicons name="sparkles" size={16} color={c.accent} />
+                  <Text style={styles.aiHintText}>{t('addFood.aiHint', { query: query.trim() })}</Text>
                 </Pressable>
               </>
             )}
@@ -292,29 +297,29 @@ export default function AddFoodScreen() {
         {mode === 'Scan' && (
           <>
             <BarcodeScanner active={scanStatus.kind !== 'looking'} onScan={onScan} />
-            {scanStatus.kind === 'idle' && <Text style={styles.empty}>Point the camera at the barcode on the package.</Text>}
+            {scanStatus.kind === 'idle' && <Text style={styles.empty}>{t('addFood.pointCamera')}</Text>}
             {scanStatus.kind === 'looking' && (
               <View style={styles.scanRow}>
-                <ActivityIndicator color={Colors.accent} />
-                <Text style={styles.muted}>Looking up {scanStatus.code}…</Text>
+                <ActivityIndicator color={c.accent} />
+                <Text style={styles.muted}>{t('addFood.lookingUp', { code: scanStatus.code })}</Text>
               </View>
             )}
-            <Text style={styles.label}>Or type the numbers under the barcode</Text>
+            <Text style={styles.label}>{t('addFood.typeCode')}</Text>
             <View style={styles.codeRow}>
               <TextInput
                 value={typedCode}
-                onChangeText={(t) => setTypedCode(t.replace(/\D/g, ''))}
-                placeholder="e.g. 3017620422003"
-                placeholderTextColor={Colors.textSecondary}
+                onChangeText={(text) => setTypedCode(text.replace(/\D/g, ''))}
+                placeholder={t('addFood.codePlaceholder')}
+                placeholderTextColor={c.textSecondary}
                 keyboardType="number-pad"
                 maxLength={14}
                 returnKeyType="search"
                 onSubmitEditing={() => typedCode.length >= 8 && onScan(typedCode)}
                 style={[styles.input, styles.codeInput]}
-                accessibilityLabel="Barcode number"
+                accessibilityLabel={t('addFood.barcodeNumber')}
               />
               <Button
-                label="Look up"
+                label={t('addFood.lookUp')}
                 variant="secondary"
                 onPress={() => onScan(typedCode)}
                 disabled={typedCode.length < 8 || scanStatus.kind === 'looking'}
@@ -323,9 +328,9 @@ export default function AddFoodScreen() {
             {scanStatus.kind === 'missing' && (
               <>
                 <Text style={styles.empty}>
-                  This product isn&apos;t in the food database yet. Describe it instead and the AI will estimate it.
+                  {t('addFood.notInDb')}
                 </Text>
-                <Button label="Describe it instead" variant="secondary" onPress={() => setMode('Describe')} />
+                <Button label={t('addFood.describeInstead')} variant="secondary" onPress={() => setMode('Describe')} />
               </>
             )}
           </>
@@ -333,26 +338,26 @@ export default function AddFoodScreen() {
 
         {mode === 'Describe' && (
           <>
-            <Text style={styles.label}>What did you eat?</Text>
+            <Text style={styles.label}>{t('addFood.whatDidYouEat')}</Text>
             <TextInput
               value={description}
-              onChangeText={(t) => {
-                setDescription(t);
+              onChangeText={(text) => {
+                setDescription(text);
                 setEstimate(null);
               }}
-              placeholder="e.g. 200 g chicken breast, a cup of rice and a salad with olive oil"
-              placeholderTextColor={Colors.textSecondary}
+              placeholder={t('addFood.describePlaceholder')}
+              placeholderTextColor={c.textSecondary}
               style={[styles.input, styles.multiline]}
               multiline
               autoFocus={!description}
             />
             {!estimate && (
-              <Button label={estimating ? 'Estimating…' : 'Estimate with AI'} onPress={runEstimate} disabled={estimating || !description.trim()} />
+              <Button label={estimating ? t('addFood.estimating') : t('addFood.estimate')} onPress={runEstimate} disabled={estimating || !description.trim()} />
             )}
-            {estimating && <ActivityIndicator color={Colors.accent} />}
+            {estimating && <ActivityIndicator color={c.accent} />}
             {estimate && estimate.length > 0 && (
               <>
-                <Text style={styles.section}>Check the amounts</Text>
+                <Text style={styles.section}>{t('addFood.checkAmounts')}</Text>
                 {estimate.map((item, i) => {
                   const r = resized(item);
                   return (
@@ -363,7 +368,7 @@ export default function AddFoodScreen() {
                         <Ionicons
                           name={item.keep ? 'checkmark-circle' : 'ellipse-outline'}
                           size={24}
-                          color={item.keep ? Colors.accent : Colors.textSecondary}
+                          color={item.keep ? c.accent : c.textSecondary}
                         />
                       </Pressable>
                       <View style={{ flex: 1 }}>
@@ -374,7 +379,7 @@ export default function AddFoodScreen() {
                       </View>
                       <TextInput
                         value={item.gramsText}
-                        onChangeText={(t) => setEstimate((all) => all!.map((x, j) => (j === i ? { ...x, gramsText: t } : x)))}
+                        onChangeText={(text) => setEstimate((all) => all!.map((x, j) => (j === i ? { ...x, gramsText: text } : x)))}
                         keyboardType="decimal-pad"
                         style={styles.grams}
                         selectTextOnFocus
@@ -384,7 +389,7 @@ export default function AddFoodScreen() {
                   );
                 })}
                 <Button
-                  label={`Add ${kept.length} item${kept.length === 1 ? '' : 's'} · ${Math.round(keptTotal.kcal)} kcal`}
+                  label={t('addFood.addItems', { count: kept.length, kcal: Math.round(keptTotal.kcal) })}
                   onPress={addEstimate}
                   disabled={kept.length === 0}
                 />
@@ -396,21 +401,21 @@ export default function AddFoodScreen() {
 
         {mode === 'Quick' && (
           <>
-            <Text style={styles.label}>Name (optional)</Text>
+            <Text style={styles.label}>{t('addFood.nameOptional')}</Text>
             <TextInput
               value={quick.name}
               onChangeText={(name) => setQuick((q) => ({ ...q, name }))}
-              placeholder="e.g. Restaurant meal"
-              placeholderTextColor={Colors.textSecondary}
+              placeholder={t('addFood.namePlaceholder')}
+              placeholderTextColor={c.textSecondary}
               style={styles.input}
             />
             <View style={styles.quickGrid}>
               {(
                 [
-                  ['kcal', 'Calories'],
-                  ['protein', 'Protein g'],
-                  ['carbs', 'Carbs g'],
-                  ['fat', 'Fat g'],
+                  ['kcal', t('addFood.calories')],
+                  ['protein', t('addFood.proteinG')],
+                  ['carbs', t('addFood.carbsG')],
+                  ['fat', t('addFood.fatG')],
                 ] as const
               ).map(([key, label]) => (
                 <View key={key} style={styles.quickField}>
@@ -420,20 +425,20 @@ export default function AddFoodScreen() {
                     onChangeText={(v) => setQuick((q) => ({ ...q, [key]: v }))}
                     keyboardType="decimal-pad"
                     placeholder="0"
-                    placeholderTextColor={Colors.textSecondary}
+                    placeholderTextColor={c.textSecondary}
                     style={styles.input}
                   />
                 </View>
               ))}
             </View>
-            <Button label="Add" onPress={addQuick} disabled={parseNumber(quick.kcal) === null} />
+            <Button label={t('addFood.add')} onPress={addQuick} disabled={parseNumber(quick.kcal) === null} />
           </>
         )}
       </ScrollView>
 
       {justAdded && (
         <View style={styles.toast} pointerEvents="none">
-          <Ionicons name="checkmark-circle" size={18} color={Colors.accentText} />
+          <Ionicons name="checkmark-circle" size={18} color={c.accentText} />
           <Text style={styles.toastText}>{justAdded}</Text>
         </View>
       )}
@@ -454,6 +459,9 @@ function FoodSection({
   meal: Meal;
   onQuickAdd: (food: Food) => void;
 }) {
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   if (foods.length === 0) return null;
   return (
     <>
@@ -473,8 +481,8 @@ function FoodSection({
               {Math.round(defaultGrams(f))} g · {Math.round((f.kcal * defaultGrams(f)) / 100)} kcal
             </Text>
           </View>
-          <Pressable onPress={() => onQuickAdd(f)} hitSlop={8} style={styles.plus} accessibilityLabel={`Add ${f.name}`}>
-            <Ionicons name="add" size={20} color={Colors.accentText} />
+          <Pressable onPress={() => onQuickAdd(f)} hitSlop={8} style={styles.plus} accessibilityLabel={t('addFood.addNamed', { name: f.name })}>
+            <Ionicons name="add" size={20} color={c.accentText} />
           </Pressable>
         </Pressable>
       ))}
@@ -482,8 +490,8 @@ function FoodSection({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   top: { gap: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
   meals: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
   content: { padding: Spacing.lg, gap: Spacing.sm, paddingBottom: 80 },
@@ -491,48 +499,48 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     height: 48,
   },
-  searchInput: { flex: 1, color: Colors.text, fontSize: 16 },
-  section: { color: Colors.text, fontSize: 16, fontWeight: '800', marginTop: Spacing.md },
+  searchInput: { flex: 1, color: c.text, fontSize: 16 },
+  section: { color: c.text, fontSize: 16, fontWeight: '800', marginTop: Spacing.md },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: Radius.md,
     padding: Spacing.md,
   },
-  rowName: { color: Colors.text, fontSize: 15, fontWeight: '700' },
-  muted: { color: Colors.textSecondary, fontSize: 13 },
+  rowName: { color: c.text, fontSize: 15, fontWeight: '700' },
+  muted: { color: c.textSecondary, fontSize: 13 },
   plus: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: Colors.accent,
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  empty: { color: Colors.textSecondary, fontSize: 13, textAlign: 'center', marginTop: Spacing.md, lineHeight: 19 },
+  empty: { color: c.textSecondary, fontSize: 13, textAlign: 'center', marginTop: Spacing.md, lineHeight: 19 },
   aiHint: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     borderStyle: 'dashed',
     borderRadius: Radius.md,
     padding: Spacing.md,
     marginTop: Spacing.md,
   },
-  aiHintText: { color: Colors.text, fontSize: 14, fontWeight: '600', flex: 1 },
-  label: { color: Colors.textSecondary, fontSize: 13, fontWeight: '700', marginTop: Spacing.xs },
+  aiHintText: { color: c.text, fontSize: 14, fontWeight: '600', flex: 1 },
+  label: { color: c.textSecondary, fontSize: 13, fontWeight: '700', marginTop: Spacing.xs },
   input: {
-    backgroundColor: Colors.surface,
-    color: Colors.text,
+    backgroundColor: c.surface,
+    color: c.text,
     borderRadius: Radius.md,
     paddingHorizontal: Spacing.md,
     height: 48,
@@ -543,8 +551,8 @@ const styles = StyleSheet.create({
     width: 64,
     height: 40,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceRaised,
-    color: Colors.text,
+    backgroundColor: c.surfaceRaised,
+    color: c.text,
     textAlign: 'center',
     fontSize: 16,
     fontWeight: '700',
@@ -562,7 +570,7 @@ const styles = StyleSheet.create({
     borderRadius: Radius.md,
     padding: Spacing.md,
   },
-  errorText: { color: Colors.text, fontSize: 14, flex: 1 },
+  errorText: { color: c.text, fontSize: 14, flex: 1 },
   toast: {
     position: 'absolute',
     bottom: Spacing.xxl,
@@ -570,10 +578,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.sm,
-    backgroundColor: Colors.accent,
+    backgroundColor: c.accent,
     borderRadius: Radius.pill,
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.sm,
   },
-  toastText: { color: Colors.accentText, fontWeight: '800', flexShrink: 1 },
-});
+  toastText: { color: c.accentText, fontWeight: '800', flexShrink: 1 },
+}));

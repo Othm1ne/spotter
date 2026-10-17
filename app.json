@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "spotter",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
     },
@@ -42,7 +42,10 @@
           "recordAudioAndroid": false
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "expo-localization",
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,

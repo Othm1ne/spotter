@@ -8,6 +8,7 @@ import { getProgram } from '@/db/program';
 import { getSetting, getWeeklyGoal, setSetting } from '@/db/settings';
 import { computeTargets } from '@/lib/nutrition';
 import { DEFAULT_REMINDERS, planReminders, type ReminderSettings } from '@/lib/reminders';
+import { t } from '@/i18n';
 import { dayKey, startOfWeek } from '@/lib/stats';
 
 const PREFIX = 'reminder-';
@@ -93,7 +94,12 @@ async function sync(db: SQLiteDatabase) {
   for (const r of reminders) {
     await Notifications.scheduleNotificationAsync({
       identifier: PREFIX + r.id,
-      content: { title: r.title, body: r.body, sound: true, data: { url: r.url } },
+      content: {
+        title: t(`notify.${r.title}`, r.params),
+        body: t(`notify.${r.body}`, { ...r.params, count: r.params?.left ?? 0 }),
+        sound: true,
+        data: { url: r.url },
+      },
       trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: r.at },
     });
   }

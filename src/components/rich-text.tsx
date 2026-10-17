@@ -1,9 +1,11 @@
-import { StyleSheet, Text, View, type TextStyle } from 'react-native';
+import { Text, View, type TextStyle } from 'react-native';
 
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { makeStyles } from '@/theme';
 
 /** Renders **bold** and *italic* spans inside one line. */
 function Inline({ text, style }: { text: string; style?: TextStyle }) {
+  const styles = useStyles();
   const parts = text.split(/(\*\*[^*]+\*\*|\*[^*\s][^*]*\*)/g).filter(Boolean);
   return (
     <Text style={[styles.text, style]}>
@@ -29,6 +31,7 @@ function Inline({ text, style }: { text: string; style?: TextStyle }) {
  * numbered lists, bold and italic. Anything else shows as plain text.
  */
 export function RichText({ text }: { text: string }) {
+  const styles = useStyles();
   const lines = text.replace(/\r/g, '').split('\n');
   return (
     <View style={styles.wrap}>
@@ -72,14 +75,14 @@ export function RichText({ text }: { text: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   wrap: { gap: 3 },
   gap: { height: Spacing.xs },
-  text: { color: Colors.text, fontSize: 16, lineHeight: 23 },
+  text: { color: c.text, fontSize: 16, lineHeight: 23 },
   bold: { fontWeight: '800' },
   italic: { fontStyle: 'italic' },
   heading: { fontSize: 17, fontWeight: '800', marginTop: Spacing.xs },
   listRow: { flexDirection: 'row', gap: Spacing.sm, paddingLeft: 2 },
-  marker: { color: Colors.accent, fontSize: 16, lineHeight: 23, fontWeight: '800', minWidth: 14 },
+  marker: { color: c.accent, fontSize: 16, lineHeight: 23, fontWeight: '800', minWidth: 14 },
   listText: { flex: 1 },
-});
+}));

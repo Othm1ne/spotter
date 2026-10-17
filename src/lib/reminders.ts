@@ -46,7 +46,7 @@ export type ReminderState = {
   nextWorkout: string | null;
 };
 
-export type Reminder = { id: string; at: Date; title: string; body: string; url: string };
+export type Reminder = { id: string; at: Date; title: string; body: string; params?: Record<string, string | number>; url: string };
 
 export function parseTime(time: string): { hour: number; minute: number } {
   const [h, m] = time.split(':').map(Number);
@@ -64,15 +64,12 @@ function at(day: Date, time: string): Date {
   return d;
 }
 
-const MEALS = [
-  { key: 'breakfast', title: 'Breakfast time', body: 'Log your breakfast: your usual is one tap away.' },
-  { key: 'lunch', title: 'Lunch time', body: 'Log your lunch and see what is left for today.' },
-  { key: 'dinner', title: 'Dinner time', body: 'Log your dinner to close the day on target.' },
-] as const;
+const MEALS = ['breakfast', 'lunch', 'dinner'] as const;
 
 /**
  * Reminders for today (from now) and the following days. Today's are skipped when the thing is
  * already done; later days are scheduled in full and refreshed the next time the app opens.
+ * Texts are `notify.<title>` / `notify.<body>` translations filled with `params`.
  */
 export function planReminders(s: ReminderSettings, state: ReminderState, now: Date, days = 2): Reminder[] {
   const out: Reminder[] = [];
@@ -85,48 +82,40 @@ export function planReminders(s: ReminderSettings, state: ReminderState, now: Da
 
     if (s.meals) {
       for (const meal of MEALS) {
-        if (today && state.mealsLogged.includes(meal.key)) continue;
-        out.push({ id: `meal-${meal.key}-${key}`, at: at(day, s[meal.key]), title: meal.title, body: meal.body, url: '/nutrition' });
+        if (today && state.mealsLogged.includes(meal)) continue;
+        out.push({ id: `meal-${meal}-${key}`, at: at(day, s[meal]), title: `${meal}Title`, body: `${meal}Body`, url: '/nutrition' });
       }
     }
 
     if (s.water && !(today && state.waterTarget !== null && state.waterMl >= state.waterTarget)) {
       const start = parseTime(s.waterStart);
       const end = parseTime(s.waterEnd);
-      const target = state.waterTarget ? ` Goal: ${(state.waterTarget / 1000).toFixed(1)} L today.` : '';
       for (let h = start.hour; h * 60 + start.minute <= end.hour * 60 + end.minute; h += Math.max(1, s.waterEveryHours)) {
         out.push({
           id: `water-${h}-${key}`,
           at: at(day, formatTime(h, start.minute)),
-          title: 'Water break',
-          body: `Drink a glass of water.${target}`,
+          title: 'waterTitle',
+          body: state.waterTarget ? 'waterBodyGoal' : 'waterBody',
+          params: state.waterTarget ? { liters: (state.waterTarget / 1000).toFixed(1) } : undefined,
           url: '/nutrition',
         });
       }
     }
 
     if (s.weighIn && !(today && state.weighedToday)) {
-      out.push({
-        id: `weigh-${key}`,
-        at: at(day, s.weighInTime),
-        title: 'Morning weigh-in',
-        body: 'Step on the scale before breakfast: it keeps your calorie target accurate.',
-        url: '/weight',
-      });
+      out.push({ id: `weigh-${key}`, at: at(day, s.weighInTime), title: 'weighTitle', body: 'weighBody', url: '/weight' });
     }
 
     // Weekly goal reached: no more workout nudges until the next week starts.
     const sameWeek = dayKey(startOfWeek(day)) === dayKey(startOfWeek(now));
     if (s.workout && !(today && state.trainedToday) && !(sameWeek && goalReached)) {
+      const next = state.nextWorkout;
       out.push({
         id: `workout-${key}`,
         at: at(day, s.workoutTime),
-        title: today && state.nextWorkout ? `Today: ${state.nextWorkout}` : 'Time to train',
-        body: state.nextWorkout
-          ? `${state.nextWorkout} is next. Your weights are ready.`
-          : sameWeek
-            ? `${state.weeklyGoal - state.workoutsThisWeek} workouts to go this week.`
-            : 'A new week: start it strong.',
+        title: today && next ? 'workoutTodayTitle' : 'workoutTitle',
+        body: next ? 'workoutNextBody' : sameWeek ? 'workoutLeftBody' : 'workoutNewWeekBody',
+        params: { workout: next ?? '', left: state.weeklyGoal - state.workoutsThisWeek },
         url: '/train',
       });
     }

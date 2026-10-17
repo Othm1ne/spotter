@@ -174,7 +174,8 @@ export async function startRoutine(db: SQLiteDatabase, routineId: number): Promi
           suggestion ? (suggestion.weight ?? set.weight) : (set.weight ?? last[index]?.weight ?? null),
           suggestion ? suggestion.reps : (set.reps ?? last[index]?.reps ?? null),
           block.restSeconds,
-          index === 0 ? (suggestion?.hint ?? null) : null
+          // Saved as data and translated when shown, so it follows the app language.
+          index === 0 && suggestion ? JSON.stringify(suggestion.hint) : null
         );
       }
     }

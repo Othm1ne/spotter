@@ -1,9 +1,10 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import * as Haptics from 'expo-haptics';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import type { IconName } from '@/components/icon';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 
 /** Big selectable card used in onboarding choices. */
 export function OptionCard({
@@ -22,6 +23,8 @@ export function OptionCard({
   /** Narrow layout for side-by-side cards: no radio circle. */
   compact?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       onPress={() => {
@@ -33,7 +36,7 @@ export function OptionCard({
       style={({ pressed }) => [styles.card, selected && styles.selected, pressed && { transform: [{ scale: 0.98 }] }]}>
       {icon && (
         <View style={[styles.icon, selected && styles.iconSelected]}>
-          <Ionicons name={icon as IconName} size={22} color={selected ? Colors.accentText : Colors.text} />
+          <Ionicons name={icon as IconName} size={22} color={selected ? c.accentText : c.text} />
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
@@ -46,7 +49,7 @@ export function OptionCard({
         <Ionicons
           name={selected ? 'checkmark-circle' : 'ellipse-outline'}
           size={24}
-          color={selected ? Colors.accent : Colors.border}
+          color={selected ? c.accent : c.border}
         />
       )}
     </Pressable>
@@ -55,6 +58,8 @@ export function OptionCard({
 
 /** Small pill choice, for numbers and multi-select tags. */
 export function Chip({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <Pressable
       onPress={() => {
@@ -62,44 +67,44 @@ export function Chip({ label, selected, onPress }: { label: string; selected: bo
         onPress();
       }}
       style={({ pressed }) => [styles.chip, selected && styles.chipSelected, pressed && { opacity: 0.8 }]}>
-      <Text style={[styles.chipLabel, selected && { color: Colors.accentText }]}>{label}</Text>
+      <Text style={[styles.chipLabel, selected && { color: c.accentText }]}>{label}</Text>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((c) => ({
   card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.md,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderRadius: Radius.lg,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: c.border,
     padding: Spacing.lg,
   },
-  selected: { borderColor: Colors.accent, backgroundColor: 'rgba(198, 244, 50, 0.07)' },
+  selected: { borderColor: c.accent, backgroundColor: c.accentSoft },
   icon: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: c.surfaceRaised,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconSelected: { backgroundColor: Colors.accent },
-  title: { color: Colors.text, fontSize: 17, fontWeight: '700' },
-  subtitle: { color: Colors.textSecondary, fontSize: 14 },
+  iconSelected: { backgroundColor: c.accent },
+  title: { color: c.text, fontSize: 17, fontWeight: '700' },
+  subtitle: { color: c.textSecondary, fontSize: 14 },
   chip: {
     minWidth: 52,
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
     borderRadius: Radius.pill,
-    backgroundColor: Colors.surface,
+    backgroundColor: c.surface,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: c.border,
   },
-  chipSelected: { backgroundColor: Colors.accent, borderColor: Colors.accent },
-  chipLabel: { color: Colors.text, fontSize: 16, fontWeight: '700' },
-});
+  chipSelected: { backgroundColor: c.accent, borderColor: c.accent },
+  chipLabel: { color: c.text, fontSize: 16, fontWeight: '700' },
+}));

@@ -1,15 +1,20 @@
 import { router, useFocusEffect } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useCallback, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, Text, View } from 'react-native';
 
+import { useT, useI18n } from '@/i18n';
 import { Card, Empty } from '@/components/ui';
-import { Colors, Spacing } from '@/constants/theme';
+import { Spacing } from '@/constants/theme';
+import { makeStyles } from '@/theme';
 import { listFinishedWorkouts, type WorkoutSummary } from '@/db/workouts';
 import { formatDuration, formatVolume } from '@/lib/workout-math';
 
 /** Every finished workout, newest first. */
 export default function HistoryScreen() {
+  const { locale } = useI18n();
+  const t = useT();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const [workouts, setWorkouts] = useState<WorkoutSummary[]>([]);
 
@@ -25,7 +30,7 @@ export default function HistoryScreen() {
       data={workouts}
       keyExtractor={(w) => String(w.id)}
       contentContainerStyle={styles.list}
-      ListEmptyComponent={<Empty title="No workouts yet" body="Finished workouts show up here." />}
+      ListEmptyComponent={<Empty title={t('history.emptyTitle')} body={t('history.emptyBody')} />}
       renderItem={({ item }) => (
         <Pressable
           onPress={() => router.push({ pathname: '/history/[id]', params: { id: String(item.id) } })}
@@ -33,7 +38,7 @@ export default function HistoryScreen() {
           <Card>
             <Text style={styles.name}>{item.name}</Text>
             <Text style={styles.date}>
-              {new Date(item.started_at).toLocaleDateString(undefined, {
+              {new Date(item.started_at).toLocaleDateString(locale, {
                 weekday: 'short',
                 day: 'numeric',
                 month: 'short',
@@ -42,7 +47,7 @@ export default function HistoryScreen() {
             </Text>
             <View style={styles.stats}>
               <Text style={styles.stat}>⏱ {formatDuration(((item.finished_at ?? item.started_at) - item.started_at) / 1000)}</Text>
-              <Text style={styles.stat}>{item.set_count} sets</Text>
+              <Text style={styles.stat}>{t('common.setsCount', { count: item.set_count })}</Text>
               <Text style={styles.stat}>{formatVolume(item.volume)}</Text>
             </View>
             <Text style={styles.exercises} numberOfLines={2}>
@@ -55,12 +60,12 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   list: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 120 },
-  name: { color: Colors.text, fontSize: 18, fontWeight: '700' },
-  date: { color: Colors.textSecondary, fontSize: 14 },
+  name: { color: c.text, fontSize: 18, fontWeight: '700' },
+  date: { color: c.textSecondary, fontSize: 14 },
   stats: { flexDirection: 'row', gap: Spacing.lg },
-  stat: { color: Colors.text, fontSize: 14, fontWeight: '600' },
-  exercises: { color: Colors.textSecondary, fontSize: 14 },
-});
+  stat: { color: c.text, fontSize: 14, fontWeight: '600' },
+  exercises: { color: c.textSecondary, fontSize: 14 },
+}));

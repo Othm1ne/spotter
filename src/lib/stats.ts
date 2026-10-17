@@ -140,3 +140,14 @@ export function activityLevel(sets: number): 0 | 1 | 2 | 3 | 4 {
   if (sets < 26) return 3;
   return 4;
 }
+
+/** Whole calendar days from `time` to `now` (0 = same day). */
+export function calendarDaysBetween(time: number, now: number): number {
+  return Math.round((startOfDay(now).getTime() - startOfDay(time).getTime()) / 86_400_000);
+}
+
+/** "today" / "yesterday" / "N days ago" as a `time.*` translation key and count. */
+export function relativeDay(time: number, now: number): { key: 'today' | 'yesterday' | 'daysAgo'; count: number } {
+  const days = calendarDaysBetween(time, now);
+  return { key: days <= 0 ? 'today' : days === 1 ? 'yesterday' : 'daysAgo', count: days };
+}

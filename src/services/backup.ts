@@ -23,7 +23,7 @@ export async function pickBackup(db: SQLiteDatabase): Promise<Backup | null> {
   try {
     data = JSON.parse(await picked.result.text());
   } catch {
-    throw new BackupError("This file isn't a Spotter backup.");
+    throw new BackupError('not_backup');
   }
   return validateBackup(db, data);
 }

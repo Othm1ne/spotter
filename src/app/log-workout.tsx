@@ -3,15 +3,17 @@ import * as Haptics from 'expo-haptics';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
+import { useT, useI18n } from '@/i18n';
 import { ExercisePickerModal, SetsEditor, type DraftSet } from '@/components/sets-editor';
 import { Button } from '@/components/ui';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles, useColors } from '@/theme';
 import { getPreviousSets, saveCompletedWorkout, type Exercise } from '@/db/workouts';
 import { useNow } from '@/hooks/use-now';
 import { addDays, dayKey, parseDayKey } from '@/lib/stats';
-import { defaultWorkoutName, formatWeight, parseNumber } from '@/lib/workout-math';
+import { formatWeight, parseNumber, partOfDay } from '@/lib/workout-math';
 
 type DraftExercise = { key: number; exercise: Exercise; sets: DraftSet[] };
 
@@ -20,6 +22,10 @@ const EVENING_HOUR = 18;
 
 /** Log a workout after the fact: pick the day, the exercises, and each set's kg × reps. */
 export default function LogWorkoutScreen() {
+  const { locale } = useI18n();
+  const t = useT();
+  const c = useColors();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const params = useLocalSearchParams<{ date?: string }>();
   const now = useNow(true, 60_000);
@@ -81,13 +87,13 @@ export default function LogWorkoutScreen() {
       }))
       .filter((e) => e.sets.length > 0);
     if (logged.length === 0) {
-      Alert.alert('Nothing to save', 'Add at least one exercise with the reps you did.');
+      Alert.alert(t('logWorkout.nothingTitle'), t('logWorkout.nothingBody'));
       return;
     }
     setSaving(true);
     const startedAt = startTime(Date.now());
     const id = await saveCompletedWorkout(db, {
-      name: name.trim() || defaultWorkoutName(new Date(startedAt)),
+      name: name.trim() || t(`workout.defaultName.${partOfDay(new Date(startedAt))}`),
       startedAt,
       finishedAt: startedAt + minutes * 60 * 1000,
       exercises: logged,
@@ -98,10 +104,10 @@ export default function LogWorkoutScreen() {
 
   const dateLabel =
     date === today
-      ? 'Today'
+      ? t('time.today')
       : date === dayKey(addDays(new Date(now), -1))
-        ? 'Yesterday'
-        : parseDayKey(date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+        ? t('time.yesterday')
+        : parseDayKey(date).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -109,7 +115,7 @@ export default function LogWorkoutScreen() {
         options={{
           headerRight: () => (
             <Pressable onPress={onSave} hitSlop={8} style={styles.save}>
-              <Text style={styles.saveLabel}>Save</Text>
+              <Text style={styles.saveLabel}>{t('common.save')}</Text>
             </Pressable>
           ),
         }}
@@ -118,23 +124,23 @@ export default function LogWorkoutScreen() {
         <TextInput
           value={name}
           onChangeText={setName}
-          placeholder={defaultWorkoutName(new Date(startTime(now)))}
-          placeholderTextColor={Colors.textSecondary}
+          placeholder={t(`workout.defaultName.${partOfDay(new Date(startTime(now)))}`)}
+          placeholderTextColor={c.textSecondary}
           style={styles.name}
           returnKeyType="done"
         />
 
         <View style={styles.row}>
           <Stepper
-            label="Day"
+            label={t('logWorkout.day')}
             value={dateLabel}
             onMinus={() => setDate(dayKey(addDays(parseDayKey(date), -1)))}
             onPlus={() => setDate(dayKey(addDays(parseDayKey(date), 1)))}
             plusDisabled={date >= today}
           />
           <Stepper
-            label="Duration"
-            value={`${minutes} min`}
+            label={t('logWorkout.duration')}
+            value={t('common.minutes', { count: minutes })}
             onMinus={() => setMinutes((m) => Math.max(5, m - 5))}
             onPlus={() => setMinutes((m) => Math.min(300, m + 5))}
           />
@@ -153,8 +159,8 @@ export default function LogWorkoutScreen() {
           />
         ))}
 
-        <Button label="+ Add exercise" onPress={() => setPicking(true)} />
-        {exercises.length > 0 && <Button label="Save workout" variant="secondary" onPress={onSave} />}
+        <Button label={t('workout.addExercise')} onPress={() => setPicking(true)} />
+        {exercises.length > 0 && <Button label={t('common.saveWorkout')} variant="secondary" onPress={onSave} />}
       </ScrollView>
 
       <ExercisePickerModal visible={picking} onClose={() => setPicking(false)} onPick={addExercise} />
@@ -169,12 +175,14 @@ function Stepper(props: {
   onPlus: () => void;
   plusDisabled?: boolean;
 }) {
+  const c = useColors();
+  const styles = useStyles();
   return (
     <View style={styles.stepper}>
       <Text style={styles.stepperLabel}>{props.label}</Text>
       <View style={styles.stepperRow}>
         <Pressable onPress={props.onMinus} hitSlop={8} style={styles.stepperButton}>
-          <Ionicons name="chevron-back" size={20} color={Colors.text} />
+          <Ionicons name="chevron-back" size={20} color={c.text} />
         </Pressable>
         <Text style={styles.stepperValue} numberOfLines={1} adjustsFontSizeToFit>
           {props.value}
@@ -184,30 +192,30 @@ function Stepper(props: {
           disabled={props.plusDisabled}
           hitSlop={8}
           style={[styles.stepperButton, props.plusDisabled && { opacity: 0.3 }]}>
-          <Ionicons name="chevron-forward" size={20} color={Colors.text} />
+          <Ionicons name="chevron-forward" size={20} color={c.text} />
         </Pressable>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   content: { padding: Spacing.lg, gap: Spacing.lg, paddingBottom: 80 },
   save: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm },
-  saveLabel: { color: Colors.accent, fontSize: 17, fontWeight: '700' },
-  name: { color: Colors.text, fontSize: 24, fontWeight: '800', padding: 0 },
+  saveLabel: { color: c.accent, fontSize: 17, fontWeight: '700' },
+  name: { color: c.text, fontSize: 24, fontWeight: '800', padding: 0 },
   row: { flexDirection: 'row', gap: Spacing.sm },
-  stepper: { flex: 1, backgroundColor: Colors.surface, borderRadius: Radius.md, padding: Spacing.md, gap: Spacing.xs },
-  stepperLabel: { color: Colors.textSecondary, fontSize: 12, fontWeight: '700' },
+  stepper: { flex: 1, backgroundColor: c.surface, borderRadius: Radius.md, padding: Spacing.md, gap: Spacing.xs },
+  stepperLabel: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
   stepperRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stepperButton: {
     width: 36,
     height: 36,
     borderRadius: Radius.sm,
-    backgroundColor: Colors.surfaceRaised,
+    backgroundColor: c.surfaceRaised,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  stepperValue: { color: Colors.text, fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
-});
+  stepperValue: { color: c.text, fontSize: 16, fontWeight: '700', flex: 1, textAlign: 'center' },
+}));

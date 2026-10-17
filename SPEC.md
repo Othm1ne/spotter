@@ -41,6 +41,13 @@ A premium-feeling fitness app for me and my friends: log training fast, follow a
 5. **Nutrition & supplements** ✅: Coach review (today / last 7 days) with stats, calorie chart and AI wins/fixes/food ideas, cached until the log changes; weekly insight line on the Nutrition tab; hand-written supplement guide by evidence tier with personal "for you" reasons and doses; "Ask the coach" follow-ups open a new chat. The coach also knows the current program.
 6. **Daily dashboard** ✅: tabs Home · Train · Nutrition · Coach · Profile. Home: greeting and weigh-in, today's program workout, calories ring with protein/water (+1 glass) and Log food, a rule-based coach tip (refuel, protein catch-up, water, weigh-in, lapsed training…) that opens a coach chat, streak/week/weight tiles and a Mon–Sun strip. Train: workout in progress, program, my workouts, activity calendar, recent workouts and full history.
 
+## Since the roadmap
+- Light / dark / auto themes (electric-blue palette in `src/theme/`, styles via `makeStyles`), premium look (title glow, gradient buttons, soft cards).
+- Languages: English, French, Spanish, German (Arabic was removed: switching to right-to-left crashed Expo Go). Strings in `src/i18n/<lang>.ts` (English is the reference; the `Dict` type makes every language complete). AI answers in the app language.
+- Settings (own stack in `src/app/settings/`): profile card; General (language, appearance); Training; Notifications → Reminders page; Connections (Spotify, AI coach); Data → Backup & data page; About.
+- Smart reminders (meals, water, weigh-in, workout) and a lock-screen rest notice.
+- Spotify: PKCE login through the relay's `/spotify/callback`, now-playing card with controls (Premium) on Home and in workouts.
+
 ## Later
 - Custom exercises, set types (warm-up, drop, failure), RPE, supersets, plate calculator, kg/lb setting, progress photos, export/backup.
 - Friends (Supabase free tier): accounts, sync/backup, friends' workouts and PRs, weekly leaderboard.

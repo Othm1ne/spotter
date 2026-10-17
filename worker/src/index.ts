@@ -42,10 +42,38 @@ function validMessages(value: unknown): value is Message[] {
   return chars <= MAX_INPUT_CHARS;
 }
 
+/** App URLs the Spotify login may return to: Expo Go during development, or the installed app. */
+const APP_SCHEMES = ['exp://', 'exps://', 'spotter://'];
+
+/**
+ * Spotify only redirects to registered HTTPS URLs, but Expo Go's address changes with the
+ * network. Spotify redirects here, and this sends the code on to the app URL carried in `state`.
+ * No secret passes through: the app exchanges the code itself with PKCE.
+ */
+function spotifyCallback(url: URL): Response {
+  const state = url.searchParams.get('state') ?? '';
+  let returnUrl = '';
+  try {
+    const decoded = JSON.parse(atob(state.replace(/-/g, '+').replace(/_/g, '/'))) as { r?: unknown };
+    if (typeof decoded.r === 'string') returnUrl = decoded.r;
+  } catch {
+    // Invalid state: handled below.
+  }
+  if (!APP_SCHEMES.some((scheme) => returnUrl.startsWith(scheme))) return json({ error: 'bad_state' }, 400);
+  const params = new URLSearchParams({ state });
+  for (const key of ['code', 'error']) {
+    const value = url.searchParams.get(key);
+    if (value) params.set(key, value);
+  }
+  const target = `${returnUrl}${returnUrl.includes('?') ? '&' : '?'}${params.toString()}`;
+  return new Response(null, { status: 302, headers: { location: target, 'cache-control': 'no-store' } });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname === '/health') return json({ ok: true });
+    if (request.method === 'GET' && url.pathname === '/spotify/callback') return spotifyCallback(url);
     if (request.method !== 'POST' || url.pathname !== '/v1/chat') return json({ error: 'not_found' }, 404);
     if (request.headers.get('x-spotter-token') !== env.APP_TOKEN) return json({ error: 'unauthorized' }, 401);
 

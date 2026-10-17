@@ -1,6 +1,7 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
-import { Colors, Radius } from '@/constants/theme';
+import { Radius } from '@/constants/theme';
+import { makeStyles } from '@/theme';
 
 export function Segmented<T extends string | number>({
   options,
@@ -13,6 +14,7 @@ export function Segmented<T extends string | number>({
   onChange: (value: T) => void;
   format?: (value: T) => string;
 }) {
+  const styles = useStyles();
   return (
     <View style={styles.wrap}>
       {options.map((option) => {
@@ -31,10 +33,10 @@ export function Segmented<T extends string | number>({
   );
 }
 
-const styles = StyleSheet.create({
-  wrap: { flexDirection: 'row', backgroundColor: Colors.surfaceRaised, borderRadius: Radius.pill, padding: 3 },
+const useStyles = makeStyles((c) => ({
+  wrap: { flexDirection: 'row', backgroundColor: c.surfaceRaised, borderRadius: Radius.pill, padding: 3 },
   option: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: Radius.pill },
-  active: { backgroundColor: Colors.accent },
-  label: { color: Colors.textSecondary, fontWeight: '700', fontSize: 13 },
-  activeLabel: { color: Colors.accentText },
-});
+  active: { backgroundColor: c.accent },
+  label: { color: c.textSecondary, fontWeight: '700', fontSize: 13 },
+  activeLabel: { color: c.accentText },
+}));

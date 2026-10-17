@@ -4,6 +4,7 @@
  * Open Food Facts allows ~10 searches and ~15 product reads per minute, so search runs on submit,
  * never while typing.
  */
+import { aiLanguageName, t } from '@/i18n';
 import { ESTIMATE_PROMPT, foodFromOpenFoodFacts, parseEstimate, type EstimatedItem, type FoodInput } from '@/lib/food';
 
 import { aiChat } from './ai';
@@ -60,7 +61,8 @@ export async function productByBarcode(barcode: string): Promise<FoodInput | nul
 export async function estimateMeal(description: string): Promise<EstimatedItem[]> {
   const reply = await aiChat(
     [
-      { role: 'system', content: ESTIMATE_PROMPT },
+      { role: 'system', content: `${ESTIMATE_PROMPT}
+Write item names in ${aiLanguageName()}.` },
       { role: 'user', content: description },
     ],
     { json: true, maxTokens: 700 }
@@ -70,7 +72,5 @@ export async function estimateMeal(description: string): Promise<EstimatedItem[]
 
 export function foodErrorMessage(error: unknown): string {
   const kind = error instanceof FoodApiError ? error.kind : 'failed';
-  if (kind === 'offline') return "Couldn't connect. Check your internet and try again.";
-  if (kind === 'busy') return 'The food database is busy. Wait a few seconds and try again.';
-  return 'Something went wrong. Try again.';
+  return t(`errors.food.${kind}`);
 }

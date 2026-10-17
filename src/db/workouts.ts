@@ -1,6 +1,7 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-import { defaultWorkoutName, estimateOneRepMax } from '@/lib/workout-math';
+import { t } from '@/i18n';
+import { estimateOneRepMax, partOfDay } from '@/lib/workout-math';
 
 export type Exercise = { id: number; name: string; muscle: string; equipment: string; gif: string | null };
 
@@ -28,7 +29,7 @@ export type WorkoutSet = {
   reps: number | null;
   done: number;
   rest_seconds: number | null;
-  /** Progression advice for the exercise, on its first set. */
+  /** Progression advice for the exercise, on its first set: JSON `{ key, params }` (see lib/program). */
   hint: string | null;
 };
 
@@ -78,7 +79,7 @@ export async function startWorkout(db: SQLiteDatabase): Promise<number> {
   const now = new Date();
   const result = await db.runAsync(
     'INSERT INTO workouts (name, started_at) VALUES (?, ?)',
-    defaultWorkoutName(now),
+    t(`workout.defaultName.${partOfDay(now)}`),
     now.getTime()
   );
   return result.lastInsertRowId;

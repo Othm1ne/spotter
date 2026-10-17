@@ -1,10 +1,12 @@
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSQLiteContext } from 'expo-sqlite';
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, Text, View } from 'react-native';
 
+import { hasTranslation, useT } from '@/i18n';
 import { ExercisePreview } from '@/components/exercise-preview';
-import { Colors, Radius, Spacing } from '@/constants/theme';
+import { Radius, Spacing } from '@/constants/theme';
+import { makeStyles } from '@/theme';
 import { getGuide } from '@/db/exercise-guides';
 import { getExercise, type ExerciseDetail } from '@/db/workouts';
 
@@ -17,6 +19,8 @@ function parseList(json: string | null): string[] {
 }
 
 export default function ExerciseGuideScreen() {
+  const t = useT();
+  const styles = useStyles();
   const db = useSQLiteContext();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [exercise, setExercise] = useState<ExerciseDetail | null>(null);
@@ -33,32 +37,34 @@ export default function ExerciseGuideScreen() {
   const secondary = guide?.muscles.secondary ?? parseList(exercise.secondary);
   const steps = guide?.steps ?? parseList(exercise.instructions);
   const tips = guide?.tips ?? [];
+  // Library muscle names ("lats", "upper back"…) show as-is when there is no translation for them.
+  const muscleName = (m: string) => (hasTranslation(`muscles.${m}`) ? t(`muscles.${m}`) : m);
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Stack.Screen options={{ title: exercise.name }} />
       <ExercisePreview gif={exercise.gif} />
       <Text style={styles.meta}>
-        {exercise.muscle} · {exercise.equipment}
+        {muscleName(exercise.muscle)} · {t(`equipment.${exercise.equipment}`)}
       </Text>
 
-      <Text style={styles.section}>Muscles worked</Text>
+      <Text style={styles.section}>{t('exercise.musclesWorked')}</Text>
       <View style={styles.chips}>
         {primary.map((m) => (
           <Text key={m} style={[styles.chip, styles.chipPrimary]}>
-            {m}
+            {muscleName(m)}
           </Text>
         ))}
         {secondary.map((m) => (
           <Text key={m} style={styles.chip}>
-            {m}
+            {muscleName(m)}
           </Text>
         ))}
       </View>
 
       {steps.length > 0 ? (
         <>
-          <Text style={styles.section}>How to</Text>
+          <Text style={styles.section}>{t('exercise.howToTitle')}</Text>
           {steps.map((step, i) => (
             <View key={i} style={styles.step}>
               <Text style={styles.stepNumber}>{i + 1}</Text>
@@ -67,12 +73,12 @@ export default function ExerciseGuideScreen() {
           ))}
         </>
       ) : (
-        <Text style={styles.body}>This is a custom exercise, so there are no instructions for it yet.</Text>
+        <Text style={styles.body}>{t('exercise.custom')}</Text>
       )}
 
       {tips.length > 0 && (
         <>
-          <Text style={styles.section}>Tips</Text>
+          <Text style={styles.section}>{t('exercise.tips')}</Text>
           {tips.map((tip, i) => (
             <View key={i} style={styles.step}>
               <Text style={styles.bullet}>•</Text>
@@ -85,26 +91,26 @@ export default function ExerciseGuideScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: Colors.background },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.background },
   content: { padding: Spacing.lg, gap: Spacing.md, paddingBottom: 60 },
-  meta: { color: Colors.textSecondary, fontSize: 15 },
-  section: { color: Colors.text, fontSize: 20, fontWeight: '800', marginTop: Spacing.sm },
+  meta: { color: c.textSecondary, fontSize: 15 },
+  section: { color: c.text, fontSize: 20, fontWeight: '800', marginTop: Spacing.sm },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
   chip: {
-    color: Colors.text,
+    color: c.text,
     fontSize: 14,
     fontWeight: '600',
     paddingHorizontal: Spacing.md,
     paddingVertical: 6,
     borderRadius: Radius.pill,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: c.border,
     overflow: 'hidden',
   },
-  chipPrimary: { backgroundColor: Colors.muscle, borderColor: Colors.muscle, color: '#FFFFFF' },
+  chipPrimary: { backgroundColor: c.muscle, borderColor: c.muscle, color: '#FFFFFF' },
   step: { flexDirection: 'row', gap: Spacing.md },
-  stepNumber: { color: Colors.accent, fontSize: 16, fontWeight: '800', width: 18 },
-  bullet: { color: Colors.accent, fontSize: 16, fontWeight: '800', width: 18 },
-  body: { color: Colors.text, fontSize: 16, lineHeight: 23, flex: 1 },
-});
+  stepNumber: { color: c.accent, fontSize: 16, fontWeight: '800', width: 18 },
+  bullet: { color: c.accent, fontSize: 16, fontWeight: '800', width: 18 },
+  body: { color: c.text, fontSize: 16, lineHeight: 23, flex: 1 },
+}));
