@@ -22,6 +22,9 @@ type Props = {
   onRemoveSet: (index: number) => void;
   onRemove: () => void;
   onInfo: () => void;
+  /** Move the exercise up or down in the plan; omitted at the ends. */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
   /** Rest after each set, in seconds. Omit to hide the rest control. */
   restSeconds?: number;
   onRestChange?: (seconds: number) => void;
@@ -47,6 +50,16 @@ export function SetsEditor(props: Props) {
             <Text style={styles.muted}>{t(`muscles.${exercise.muscle}`)} · {t('exercise.howTo')}</Text>
           </View>
         </Pressable>
+        {props.onMoveUp && (
+          <Pressable onPress={props.onMoveUp} hitSlop={8} style={styles.move} accessibilityLabel={t('common.moveUp')}>
+            <Ionicons name="arrow-up" size={18} color={c.textSecondary} />
+          </Pressable>
+        )}
+        {props.onMoveDown && (
+          <Pressable onPress={props.onMoveDown} hitSlop={8} style={styles.move} accessibilityLabel={t('common.moveDown')}>
+            <Ionicons name="arrow-down" size={18} color={c.textSecondary} />
+          </Pressable>
+        )}
         <Pressable onPress={props.onRemove} hitSlop={10} accessibilityLabel={t('common.removeNamed', { name: exercise.name })}>
           <Ionicons name="trash-outline" size={20} color={c.textSecondary} />
         </Pressable>
@@ -136,6 +149,7 @@ export function ExercisePickerModal({
 const useStyles = makeStyles((c) => ({
   block: { gap: Spacing.sm, backgroundColor: c.surface, borderRadius: Radius.lg, padding: Spacing.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
+  move: { width: 30, height: 30, borderRadius: 15, backgroundColor: c.surfaceRaised, alignItems: 'center', justifyContent: 'center' },
   title: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: Spacing.md },
   name: { color: c.accent, fontSize: 17, fontWeight: '700' },
   muted: { color: c.textSecondary, fontSize: 13 },

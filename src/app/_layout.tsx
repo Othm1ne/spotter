@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { DarkTheme, DefaultTheme, router, Stack, ThemeProvider } from 'expo-router';
 import { Pressable, Text } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SQLiteProvider } from 'expo-sqlite';
 import { StatusBar } from 'expo-status-bar';
 
@@ -24,13 +25,16 @@ Notifications.setNotificationHandler({
 
 export default function RootLayout() {
   return (
-    <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
-      <AppThemeProvider>
-        <I18nProvider>
-          <ThemedStack />
-        </I18nProvider>
-      </AppThemeProvider>
-    </SQLiteProvider>
+    // Needed for swipe gestures (swipe a row left to delete it).
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SQLiteProvider databaseName={DATABASE_NAME} onInit={migrate}>
+        <AppThemeProvider>
+          <I18nProvider>
+            <ThemedStack />
+          </I18nProvider>
+        </AppThemeProvider>
+      </SQLiteProvider>
+    </GestureHandlerRootView>
   );
 }
 
@@ -56,6 +60,8 @@ function ThemedStack() {
       <NotificationsBridge />
       <Stack
         screenOptions={{
+          // SDK 58 makes iOS headers transparent by default; screens are laid out for a solid one.
+          headerTransparent: false,
           headerTintColor: c.accent,
           headerTitleStyle: { color: c.text },
           // Arrow only: the default label would show the previous route's name, e.g. "(tabs)".

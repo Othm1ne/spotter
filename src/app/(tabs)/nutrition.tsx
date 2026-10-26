@@ -7,6 +7,7 @@ import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-nati
 
 import { useT, useI18n } from '@/i18n';
 import { ProgressRing } from '@/components/progress-ring';
+import { SwipeToDelete } from '@/components/swipe-to-delete';
 import { Card, Screen } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { makeStyles, useColors } from '@/theme';
@@ -80,6 +81,11 @@ export default function NutritionTab() {
     load();
   }
 
+  async function removeEntry(id: number) {
+    await deleteEntry(db, id);
+    load();
+  }
+
   function onEntryPress(entry: FoodEntry) {
     if (entry.food_id) {
       router.push({ pathname: '/food/[id]', params: { id: String(entry.food_id), entryId: String(entry.id) } });
@@ -113,7 +119,11 @@ export default function NutritionTab() {
       title={t('tabs.nutrition')}
       right={
         <View style={styles.dayNav}>
-          <Pressable onPress={() => shiftDay(-1)} hitSlop={8} style={styles.dayButton} accessibilityLabel={t('nutrition.prevDay')}>
+          <Pressable
+            onPress={() => shiftDay(-1)}
+            hitSlop={8}
+            style={styles.dayButton}
+            accessibilityLabel={t('nutrition.prevDay')}>
             <Ionicons name="chevron-back" size={20} color={c.text} />
           </Pressable>
           <Text style={styles.dayLabel}>{dayLabel}</Text>
@@ -146,7 +156,12 @@ export default function NutritionTab() {
                 </View>
               </View>
               <View style={styles.macros}>
-                <MacroProgress label={t('macros.protein')} eaten={eaten.protein} target={targets.protein} color={c.macros.protein} />
+                <MacroProgress
+                  label={t('macros.protein')}
+                  eaten={eaten.protein}
+                  target={targets.protein}
+                  color={c.macros.protein}
+                />
                 <MacroProgress label={t('macros.carbs')} eaten={eaten.carbs} target={targets.carbs} color={c.macros.carbs} />
                 <MacroProgress label={t('macros.fat')} eaten={eaten.fat} target={targets.fat} color={c.macros.fat} />
               </View>
@@ -163,18 +178,24 @@ export default function NutritionTab() {
           <Ionicons name="water" size={26} color={c.macros.protein} />
           <View style={{ flex: 1, gap: 6 }}>
             <Text style={styles.cardTitle}>
-              {liters(water)} L
-              {targets ? <Text style={styles.muted}> / {(targets.waterMl / 1000).toFixed(1)} L</Text> : null}
+              {liters(water)} L{targets ? <Text style={styles.muted}> / {(targets.waterMl / 1000).toFixed(1)} L</Text> : null}
             </Text>
             {targets && (
               <View style={styles.track}>
                 <View
-                  style={[styles.fill, { width: `${Math.min(100, (water / targets.waterMl) * 100)}%`, backgroundColor: c.macros.protein }]}
+                  style={[
+                    styles.fill,
+                    { width: `${Math.min(100, (water / targets.waterMl) * 100)}%`, backgroundColor: c.macros.protein },
+                  ]}
                 />
               </View>
             )}
           </View>
-          <Pressable onPress={() => changeWater(-GLASS_ML)} disabled={water === 0} hitSlop={6} style={[styles.waterButton, water === 0 && { opacity: 0.3 }]}>
+          <Pressable
+            onPress={() => changeWater(-GLASS_ML)}
+            disabled={water === 0}
+            hitSlop={6}
+            style={[styles.waterButton, water === 0 && { opacity: 0.3 }]}>
             <Ionicons name="remove" size={20} color={c.text} />
           </Pressable>
           <Pressable onPress={() => changeWater(GLASS_ML)} hitSlop={6} style={[styles.waterButton, styles.waterAdd]}>
@@ -195,7 +216,9 @@ export default function NutritionTab() {
                 {t(`insight.${insight.key}`, insight.params)}
               </Text>
             </Pressable>
-            <Pressable onPress={() => router.push('/supplements')} style={({ pressed }) => [styles.coachCard, styles.suppCard, pressed && { opacity: 0.8 }]}>
+            <Pressable
+              onPress={() => router.push('/supplements')}
+              style={({ pressed }) => [styles.coachCard, styles.suppCard, pressed && { opacity: 0.8 }]}>
               <Ionicons name="flask" size={22} color={c.accent} />
               <Text style={styles.coachTitle}>{t('screens.supplements')}</Text>
               <Text style={styles.muted}>{t('nutrition.whatWorks')}</Text>
@@ -222,22 +245,23 @@ export default function NutritionTab() {
                 </Pressable>
               </View>
               {items.map((e) => (
-                <Pressable
-                  key={e.id}
-                  onPress={() => onEntryPress(e)}
-                  onLongPress={() => onEntryLongPress(e)}
-                  style={({ pressed }) => [styles.entry, pressed && { opacity: 0.6 }]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.entryName} numberOfLines={1}>
-                      {e.name}
-                    </Text>
-                    <Text style={styles.muted}>
-                      {e.grams ? `${Math.round(e.grams)} g · ` : ''}
-                      {t('macros.short', { p: Math.round(e.protein), c: Math.round(e.carbs), f: Math.round(e.fat) })}
-                    </Text>
-                  </View>
-                  <Text style={styles.entryKcal}>{Math.round(e.kcal)}</Text>
-                </Pressable>
+                <SwipeToDelete key={e.id} onDelete={() => removeEntry(e.id)}>
+                  <Pressable
+                    onPress={() => onEntryPress(e)}
+                    onLongPress={() => onEntryLongPress(e)}
+                    style={({ pressed }) => [styles.entry, pressed && { opacity: 0.6 }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.entryName} numberOfLines={1}>
+                        {e.name}
+                      </Text>
+                      <Text style={styles.muted}>
+                        {e.grams ? `${Math.round(e.grams)} g · ` : ''}
+                        {t('macros.short', { p: Math.round(e.protein), c: Math.round(e.carbs), f: Math.round(e.fat) })}
+                      </Text>
+                    </View>
+                    <Text style={styles.entryKcal}>{Math.round(e.kcal)}</Text>
+                  </Pressable>
+                </SwipeToDelete>
               ))}
               {items.length === 0 && before.length > 0 && (
                 <Pressable onPress={() => onCopyYesterday(meal.value)} style={styles.copy}>

@@ -1,5 +1,5 @@
 import { useMemo, useRef } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View, type ScrollViewInstance } from 'react-native';
 
 import { useT, useI18n } from '@/i18n';
 import { Spacing } from '@/constants/theme';
@@ -21,7 +21,7 @@ export function ActivityCalendar({ days, selected, onSelect }: Props) {
   const { locale } = useI18n();
   const c = useColors();
   const styles = useStyles();
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
   const today = dayKey(new Date());
 
   const columns = useMemo(() => {

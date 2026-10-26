@@ -7,13 +7,21 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useT, useI18n } from '@/i18n';
 import { ActivityCalendar, ActivityLegend } from '@/components/activity-calendar';
 import { ProgramCard } from '@/components/program-card';
+import { SwipeToDelete } from '@/components/swipe-to-delete';
 import { Button, Card, Screen, SectionTitle } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { makeStyles, useColors } from '@/theme';
 import { getProfile } from '@/db/profile';
 import { getProgram, type Program } from '@/db/program';
-import { listRoutines, type RoutineSummary } from '@/db/routines';
-import { getActiveWorkout, listFinishedWorkouts, startWorkout, type Workout, type WorkoutSummary } from '@/db/workouts';
+import { deleteRoutine, listRoutines, type RoutineSummary } from '@/db/routines';
+import {
+  deleteWorkout,
+  getActiveWorkout,
+  listFinishedWorkouts,
+  startWorkout,
+  type Workout,
+  type WorkoutSummary,
+} from '@/db/workouts';
 import { useNow } from '@/hooks/use-now';
 import { useStartRoutine } from '@/hooks/use-start-routine';
 import { useStats } from '@/hooks/use-stats';
@@ -50,6 +58,17 @@ export default function TrainTab() {
       })();
     }, [db])
   );
+
+  async function removeRoutine(id: number) {
+    await deleteRoutine(db, id);
+    setRoutines((all) => all.filter((r) => r.id !== id));
+  }
+
+  async function removeWorkout(id: number) {
+    await deleteWorkout(db, id);
+    setRecent(await listFinishedWorkouts(db, RECENT));
+    stats.reload();
+  }
 
   async function onStartEmpty() {
     await startWorkout(db);
@@ -95,35 +114,43 @@ export default function TrainTab() {
             <Card style={styles.emptyPlan}>
               <Ionicons name="clipboard-outline" size={28} color={c.accent} />
               <Text style={styles.cardTitle}>{t('train.planOwn')}</Text>
-              <Text style={[styles.muted, { textAlign: 'center' }]}>
-                {t('train.planOwnBody')}
-              </Text>
+              <Text style={[styles.muted, { textAlign: 'center' }]}>{t('train.planOwnBody')}</Text>
             </Card>
           </Pressable>
         ) : (
           routines.map((r) => (
-            <Pressable
+            <SwipeToDelete
               key={r.id}
-              onPress={() => router.push({ pathname: '/routine/[id]', params: { id: String(r.id) } })}
-              style={({ pressed }) => pressed && { opacity: 0.8 }}>
-              <Card style={styles.routine}>
-                <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>
-                    {r.name}
-                  </Text>
-                  <Text style={styles.muted}>
-                    {t('train.planLine', { count: r.exercise_count, sets: r.set_count })}
-                    {r.last_done ? ` · ${t(`time.done.${relativeDay(r.last_done, now).key}`, { count: relativeDay(r.last_done, now).count })}` : ''}
-                  </Text>
-                  <Text style={styles.muted} numberOfLines={1}>
-                    {r.exercises}
-                  </Text>
-                </View>
-                <Pressable onPress={() => startRoutine(r.id)} hitSlop={6} style={styles.play} accessibilityLabel={t('common.startNamed', { name: r.name })}>
-                  <Ionicons name="play" size={22} color={c.accentText} />
-                </Pressable>
-              </Card>
-            </Pressable>
+              onDelete={() => removeRoutine(r.id)}
+              confirm={{ title: t('routine.deleteTitle'), message: t('routine.deleteBody') }}>
+              <Pressable
+                onPress={() => router.push({ pathname: '/routine/[id]', params: { id: String(r.id) } })}
+                style={({ pressed }) => pressed && { opacity: 0.8 }}>
+                <Card style={styles.routine}>
+                  <View style={{ flex: 1, gap: 2 }}>
+                    <Text style={styles.cardTitle} numberOfLines={1}>
+                      {r.name}
+                    </Text>
+                    <Text style={styles.muted}>
+                      {t('train.planLine', { count: r.exercise_count, sets: r.set_count })}
+                      {r.last_done
+                        ? ` · ${t(`time.done.${relativeDay(r.last_done, now).key}`, { count: relativeDay(r.last_done, now).count })}`
+                        : ''}
+                    </Text>
+                    <Text style={styles.muted} numberOfLines={1}>
+                      {r.exercises}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => startRoutine(r.id)}
+                    hitSlop={6}
+                    style={styles.play}
+                    accessibilityLabel={t('common.startNamed', { name: r.name })}>
+                    <Ionicons name="play" size={22} color={c.accentText} />
+                  </Pressable>
+                </Card>
+              </Pressable>
+            </SwipeToDelete>
           ))
         )}
         {!active && <Button label={t('train.startEmpty')} variant="secondary" onPress={onStartEmpty} />}
@@ -131,16 +158,16 @@ export default function TrainTab() {
         <Card style={styles.calendarCard}>
           <View style={styles.calendarHeader}>
             <Text style={styles.cardTitle}>{t('train.activity')}</Text>
-            <Text style={styles.muted}>
-              {t('train.lastYear', { count: yearCount })}
-            </Text>
+            <Text style={styles.muted}>{t('train.lastYear', { count: yearCount })}</Text>
           </View>
           <ActivityCalendar days={stats.days} selected={selected} onSelect={setSelected} />
           <ActivityLegend />
 
           <View style={styles.dayPanel}>
             <Text style={styles.dayTitle}>
-              {isToday ? t('time.today') : parseDayKey(selected).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
+              {isToday
+                ? t('time.today')
+                : parseDayKey(selected).toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long' })}
             </Text>
             {day ? (
               day.workouts.map((w) => (
@@ -179,23 +206,27 @@ export default function TrainTab() {
               }
             />
             {recent.map((w) => (
-              <Pressable
+              <SwipeToDelete
                 key={w.id}
-                onPress={() => router.push({ pathname: '/history/[id]', params: { id: String(w.id) } })}
-                style={({ pressed }) => pressed && { opacity: 0.7 }}>
-                <Card style={styles.recent}>
-                  <View style={{ flex: 1, gap: 2 }}>
-                    <Text style={styles.recentName} numberOfLines={1}>
-                      {w.name}
-                    </Text>
-                    <Text style={styles.muted} numberOfLines={1}>
-                      {new Date(w.started_at).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })} ·{' '}
-                      {t('common.setsCount', { count: w.set_count })} · {formatVolume(w.volume)}
-                    </Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={16} color={c.textSecondary} />
-                </Card>
-              </Pressable>
+                onDelete={() => removeWorkout(w.id)}
+                confirm={{ title: t('history.deleteTitle'), message: t('settings.cannotUndo') }}>
+                <Pressable
+                  onPress={() => router.push({ pathname: '/history/[id]', params: { id: String(w.id) } })}
+                  style={({ pressed }) => pressed && { opacity: 0.7 }}>
+                  <Card style={styles.recent}>
+                    <View style={{ flex: 1, gap: 2 }}>
+                      <Text style={styles.recentName} numberOfLines={1}>
+                        {w.name}
+                      </Text>
+                      <Text style={styles.muted} numberOfLines={1}>
+                        {new Date(w.started_at).toLocaleDateString(locale, { weekday: 'short', day: 'numeric', month: 'short' })}{' '}
+                        · {t('common.setsCount', { count: w.set_count })} · {formatVolume(w.volume)}
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={c.textSecondary} />
+                  </Card>
+                </Pressable>
+              </SwipeToDelete>
             ))}
           </>
         )}

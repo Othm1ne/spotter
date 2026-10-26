@@ -94,7 +94,7 @@ export default function CoachHistoryScreen() {
         </Pressable>
       )}
       ListFooterComponent={
-        conversations.length > 0 ? <Text style={styles.hint}>{t('chats.hint')}</Text> : null
+        conversations.length > 0 ? <Text style={styles.hint}>{t('chats.hint')}</Text> : undefined
       }
     />
   );

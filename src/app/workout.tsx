@@ -19,10 +19,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useI18n, useT, type Params } from '@/i18n';
 import { ExerciseThumb } from '@/components/exercise-preview';
 import { MusicCard } from '@/components/music-card';
+import { Segmented } from '@/components/segmented';
+import { WorkoutFocus, type Draft, type WorkoutBlock } from '@/components/workout-focus';
 import { Button } from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { makeStyles, useColors } from '@/theme';
-import { DEFAULT_REST_SECONDS, getDefaultRest, getKeepAwake } from '@/db/settings';
+import { DEFAULT_REST_SECONDS, getDefaultRest, getKeepAwake, getSetting, setSetting } from '@/db/settings';
 import {
   addSet,
   deleteSet,
@@ -32,6 +34,7 @@ import {
   getLastSetTime,
   getPreviousSets,
   getWorkoutSets,
+  moveExercise,
   removeExercise,
   renameWorkout,
   updateSet,
@@ -43,17 +46,8 @@ import { useNow } from '@/hooks/use-now';
 import { formatDuration, formatElapsed, formatWeight, isStaleWorkout, parseNumber } from '@/lib/workout-math';
 import * as restTimer from '@/services/rest-notification';
 
-
-type Draft = { weight: string; reps: string };
-type Block = {
-  position: number;
-  exerciseId: number;
-  name: string;
-  muscle: string;
-  gif: string | null;
-  hint: string | null;
-  sets: WorkoutSet[];
-};
+type Block = WorkoutBlock;
+type ViewMode = 'focus' | 'list';
 
 const KEEP_AWAKE_TAG = 'workout';
 
@@ -79,6 +73,9 @@ export default function WorkoutScreen() {
   const [restEndsAt, setRestEndsAt] = useState<number | null>(restTimer.getRestEndsAt);
   const [restSeconds, setRestSeconds] = useState(DEFAULT_REST_SECONDS);
   const [editing, setEditing] = useState<Set<number>>(new Set());
+  const [view, setView] = useState<ViewMode>('focus');
+  // Exercise shown in focus mode; null until the user moves, then the first one with sets left.
+  const [focusIndex, setFocusIndex] = useState<number | null>(null);
   const now = useNow();
 
   const load = useCallback(async () => {
@@ -110,6 +107,8 @@ export default function WorkoutScreen() {
     let awake = false;
     (async () => {
       setRestSeconds(await getDefaultRest(db));
+      const savedView = await getSetting(db, 'workout_view');
+      if (savedView === 'list' || savedView === 'focus') setView(savedView);
       if (await getKeepAwake(db)) {
         awake = true;
         await activateKeepAwakeAsync(KEEP_AWAKE_TAG);
@@ -148,6 +147,35 @@ export default function WorkoutScreen() {
     }
     return [...map.values()];
   }, [sets]);
+
+  const openIndex = blocks.findIndex((b) => b.sets.some((s) => s.done !== 1));
+  const currentIndex = Math.min(focusIndex ?? Math.max(0, openIndex), Math.max(0, blocks.length - 1));
+
+  function changeView(next: ViewMode) {
+    setView(next);
+    setSetting(db, 'workout_view', next);
+  }
+
+  /** Last time's numbers for a set, matched by its place in the exercise. */
+  function previousFor(set: WorkoutSet) {
+    const block = blocks.find((b) => b.position === set.exercise_position);
+    const i = block ? block.sets.findIndex((s) => s.id === set.id) : -1;
+    return previous.get(set.exercise_id)?.[i];
+  }
+
+  function setValues(set: WorkoutSet, draft: Draft) {
+    setDrafts((d) => ({ ...d, [set.id]: draft }));
+    saveSet(set, draft, set.done === 1);
+  }
+
+  async function onMove(block: Block, direction: -1 | 1) {
+    if (!workout) return;
+    await moveExercise(db, workout.id, block.position, direction);
+    // Keep the moved exercise on screen in focus mode.
+    const i = blocks.findIndex((b) => b.position === block.position);
+    if (i !== -1) setFocusIndex(i + direction);
+    load();
+  }
 
   function toggleEditing(position: number) {
     setEditing((current) => {
@@ -261,12 +289,16 @@ export default function WorkoutScreen() {
   }
 
   function onBlockMenu(block: Block) {
+    const i = blocks.findIndex((b) => b.position === block.position);
     Alert.alert(block.name, undefined, [
+      ...(i > 0 ? [{ text: t('common.moveUp'), onPress: () => onMove(block, -1) }] : []),
+      ...(i < blocks.length - 1 ? [{ text: t('common.moveDown'), onPress: () => onMove(block, 1) }] : []),
       {
         text: t('workout.removeExercise'),
         style: 'destructive',
         onPress: async () => {
-          await removeExercise(db, workout!.id, block.position);
+          if (!workout) return;
+          await removeExercise(db, workout.id, block.position);
           load();
         },
       },
@@ -275,7 +307,8 @@ export default function WorkoutScreen() {
   }
 
   async function onAddSet(block: Block) {
-    await addSet(db, workout!.id, block.exerciseId, block.position);
+    if (!workout) return;
+    await addSet(db, workout.id, block.exerciseId, block.position);
     load();
   }
 
@@ -374,9 +407,33 @@ export default function WorkoutScreen() {
             returnKeyType="done"
           />
 
+          <Segmented
+            options={['focus', 'list'] as ViewMode[]}
+            value={view}
+            onChange={changeView}
+            format={(v) => t(`focus.view.${v}`)}
+          />
+
           <MusicCard />
 
-          {blocks.map((block) => {
+          {view === 'focus' && blocks.length > 0 && (
+            <WorkoutFocus
+              blocks={blocks}
+              index={currentIndex}
+              onIndex={setFocusIndex}
+              drafts={drafts}
+              previous={previous}
+              onValues={setValues}
+              onToggleDone={(set) => toggleDone(set, previousFor(set))}
+              onAddSet={onAddSet}
+              onDeleteSet={onSetLongPress}
+              onMenu={onBlockMenu}
+              onFinish={onFinish}
+              hintText={hintText}
+            />
+          )}
+
+          {view === 'list' && blocks.map((block) => {
             const prevSets = previous.get(block.exerciseId) ?? [];
             return (
               <View key={block.position} style={styles.block}>

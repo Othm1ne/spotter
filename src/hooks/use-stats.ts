@@ -7,7 +7,7 @@ import { getLiftStats, listWorkoutStats } from '@/db/stats';
 import { computeAchievements } from '@/lib/achievements';
 import { dayStreaks, groupByDay, weekStreaks, type WorkoutStat } from '@/lib/stats';
 
-/** History-wide stats, reloaded whenever the screen gains focus. */
+/** History-wide stats, reloaded whenever the screen gains focus (or with `reload` after a change). */
 export function useStats() {
   const db = useSQLiteContext();
   const [workouts, setWorkouts] = useState<WorkoutStat[]>([]);
@@ -15,16 +15,18 @@ export function useStats() {
   const [lifts, setLifts] = useState({ heaviestWeight: 0, exercisesTried: 0 });
   const [loaded, setLoaded] = useState(false);
 
+  const reload = useCallback(async () => {
+    const [w, g, l] = await Promise.all([listWorkoutStats(db), getWeeklyGoal(db), getLiftStats(db)]);
+    setWorkouts(w);
+    setGoal(g);
+    setLifts(l);
+    setLoaded(true);
+  }, [db]);
+
   useFocusEffect(
     useCallback(() => {
-      (async () => {
-        const [w, g, l] = await Promise.all([listWorkoutStats(db), getWeeklyGoal(db), getLiftStats(db)]);
-        setWorkouts(w);
-        setGoal(g);
-        setLifts(l);
-        setLoaded(true);
-      })();
-    }, [db])
+      reload();
+    }, [reload])
   );
 
   return useMemo(() => {
@@ -48,6 +50,6 @@ export function useStats() {
       earlyBird: hours.some((h) => h < 7),
       nightOwl: hours.some((h) => h >= 21),
     });
-    return { loaded, workouts, days, goal, dayStreak, weekStreak, totals, achievements };
-  }, [loaded, workouts, goal, lifts]);
+    return { loaded, workouts, days, goal, dayStreak, weekStreak, totals, achievements, reload };
+  }, [loaded, workouts, goal, lifts, reload]);
 }

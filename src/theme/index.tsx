@@ -11,6 +11,9 @@ export type { Palette } from './palettes';
 /** What the user picked in Settings; "system" follows the phone. */
 export type Appearance = 'system' | 'light' | 'dark';
 
+/** The style map StyleSheet.create accepts (React Native no longer exports a name for it). */
+type Styles = Parameters<typeof StyleSheet.create>[0];
+
 type Theme = { colors: Palette; appearance: Appearance; setAppearance: (a: Appearance) => void };
 
 const ThemeContext = createContext<Theme>({ colors: dark, appearance: 'system', setAppearance: () => {} });
@@ -55,7 +58,7 @@ export function useColors(): Palette {
  * Like StyleSheet.create, but the styles can use the current palette. Returns a hook; styles are
  * built once per palette and shared by every component that uses them.
  */
-export function makeStyles<T extends StyleSheet.NamedStyles<T>>(build: (c: Palette) => T) {
+export function makeStyles<T extends Styles>(build: (c: Palette) => T & Styles) {
   const cache = new Map<Palette, T>();
   return function useStyles(): T {
     const colors = useColors();

@@ -11,6 +11,8 @@ export default function SettingsLayout() {
   return (
     <Stack
       screenOptions={{
+        // SDK 58 makes iOS headers transparent by default; screens are laid out for a solid one.
+        headerTransparent: false,
         headerTintColor: c.accent,
         headerTitleStyle: { color: c.text },
         headerStyle: { backgroundColor: c.background },

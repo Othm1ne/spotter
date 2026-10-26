@@ -72,7 +72,7 @@ export function MusicCard() {
 
   return (
     <View style={styles.card}>
-      <Pressable onPress={() => openSpotify(now.uri)} style={styles.info} accessibilityLabel={t('music.openTrack', { title: now.title })}>
+      <Pressable onPress={() => openSpotify()} style={styles.info} accessibilityLabel={t('music.openTrack', { title: now.title })}>
         {now.image ? (
           <Image source={now.image} style={styles.cover} contentFit="cover" transition={200} />
         ) : (
@@ -107,7 +107,7 @@ export function MusicCard() {
           <Control icon="play-skip-forward" label={t('music.next')} onPress={() => press('next')} />
         </View>
       ) : (
-        <Pressable onPress={() => openSpotify(now.uri)} hitSlop={8}>
+        <Pressable onPress={() => openSpotify()} hitSlop={8}>
           <Text style={styles.action}>{t('music.open')}</Text>
         </Pressable>
       )}

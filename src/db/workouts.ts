@@ -255,6 +255,24 @@ export async function removeExercise(db: SQLiteDatabase, workoutId: number, exer
   );
 }
 
+/** Moves an exercise one place up (-1) or down (+1) in the workout, keeping its sets. */
+export async function moveExercise(db: SQLiteDatabase, workoutId: number, exercisePosition: number, direction: -1 | 1) {
+  const rows = await db.getAllAsync<{ p: number }>(
+    'SELECT DISTINCT exercise_position AS p FROM workout_sets WHERE workout_id = ? ORDER BY exercise_position',
+    workoutId
+  );
+  const positions = rows.map((r) => r.p);
+  const i = positions.indexOf(exercisePosition);
+  const other = positions[i + direction];
+  if (i === -1 || other === undefined) return;
+  // Swap through a temporary position so the two exercises never share one.
+  await db.withTransactionAsync(async () => {
+    await db.runAsync('UPDATE workout_sets SET exercise_position = -1 WHERE workout_id = ? AND exercise_position = ?', workoutId, exercisePosition);
+    await db.runAsync('UPDATE workout_sets SET exercise_position = ? WHERE workout_id = ? AND exercise_position = ?', exercisePosition, workoutId, other);
+    await db.runAsync('UPDATE workout_sets SET exercise_position = ? WHERE workout_id = ? AND exercise_position = -1', other, workoutId);
+  });
+}
+
 /**
  * Drops sets that weren't ticked and marks the workout finished.
  * Returns false (and deletes the workout) if nothing was completed.

@@ -34,8 +34,6 @@ export type NowPlaying = {
   image: string | null;
   progressMs: number;
   durationMs: number;
-  /** spotify: URI, opens the track in the Spotify app. */
-  uri: string | null;
   /** When `progressMs` was measured, to move the progress bar between polls. */
   measuredAt: number;
 };
@@ -158,7 +156,6 @@ export async function getNowPlaying(): Promise<NowPlaying | null> {
     progress_ms: number | null;
     item: {
       name: string;
-      uri: string;
       duration_ms: number;
       artists?: { name: string }[];
       album?: { images: Cover[] };
@@ -175,7 +172,6 @@ export async function getNowPlaying(): Promise<NowPlaying | null> {
     image: (images.find((i) => (i.width ?? 300) <= 320) ?? images[0])?.url ?? null,
     progressMs: data.progress_ms ?? 0,
     durationMs: data.item.duration_ms,
-    uri: data.item.uri,
     measuredAt: Date.now(),
   };
 }
@@ -185,10 +181,11 @@ export async function controlPlayback(action: 'play' | 'pause' | 'next' | 'previ
   await api(`/me/player/${action}`, { method });
 }
 
-/** Opens the Spotify app (on the current track when there is one), or the website. */
-export async function openSpotify(uri?: string | null) {
+/** Opens the Spotify app where it is (music keeps playing), or the website. */
+export async function openSpotify() {
   try {
-    await Linking.openURL(uri ?? 'spotify:');
+    // Just the app: a track link (spotify:track:…) would restart that track from the beginning.
+    await Linking.openURL('spotify:');
   } catch {
     await Linking.openURL('https://open.spotify.com');
   }

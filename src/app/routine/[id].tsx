@@ -5,6 +5,7 @@ import { useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput } from 'react-native';
 
 import { useT } from '@/i18n';
+import { PlanReviewCard } from '@/components/plan-review';
 import { ExercisePickerModal, SetsEditor, type DraftSet } from '@/components/sets-editor';
 import { Button } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
@@ -12,6 +13,7 @@ import { makeStyles, useColors } from '@/theme';
 import { deleteRoutine, getRoutine, saveRoutine } from '@/db/routines';
 import { getDefaultRest } from '@/db/settings';
 import { getPreviousSets, type Exercise } from '@/db/workouts';
+import type { PlanSuggestion } from '@/lib/plan-review';
 import { formatWeight, parseNumber } from '@/lib/workout-math';
 
 // Program days carry a rep range for progression; keep it through edits.
@@ -69,8 +71,31 @@ export default function RoutineEditorScreen() {
     setBlocks((all) => [...all, { key: Date.now(), exercise, restSeconds, sets }]);
   }
 
+  function moveBlock(index: number, direction: -1 | 1) {
+    Haptics.selectionAsync();
+    setBlocks((all) => {
+      const next = [...all];
+      [next[index], next[index + direction]] = [next[index + direction], next[index]];
+      return next;
+    });
+  }
+
   function updateBlock(key: number, change: (b: Block) => Block) {
     setBlocks((all) => all.map((b) => (b.key === key ? change(b) : b)));
+  }
+
+  function persist(toSave: Block[]) {
+    return saveRoutine(db, {
+      id: routineId,
+      name: name.trim() || t('routine.defaultName'),
+      exercises: toSave.map((b) => ({
+        exercise: b.exercise,
+        restSeconds: b.restSeconds,
+        repMin: b.repMin,
+        repMax: b.repMax,
+        sets: b.sets.map((s) => ({ weight: parseNumber(s.weight), reps: parseNumber(s.reps) })),
+      })),
+    });
   }
 
   async function onSave() {
@@ -80,19 +105,67 @@ export default function RoutineEditorScreen() {
       return;
     }
     setSaving(true);
-    await saveRoutine(db, {
-      id: routineId,
-      name: name.trim() || t('routine.defaultName'),
-      exercises: blocks.map((b) => ({
-        exercise: b.exercise,
-        restSeconds: b.restSeconds,
-        repMin: b.repMin,
-        repMax: b.repMax,
-        sets: b.sets.map((s) => ({ weight: parseNumber(s.weight), reps: parseNumber(s.reps) })),
-      })),
-    });
+    await persist(blocks);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
+  }
+
+  /** Applies one AI suggestion to the plan and saves it right away. */
+  function applySuggestion(suggestion: PlanSuggestion, exercises: Map<number, Exercise>) {
+    const reps = (repMin: number) => String(repMin);
+    let next = blocks;
+    switch (suggestion.type) {
+      case 'swap': {
+        const exercise = exercises.get(suggestion.newExerciseId);
+        if (!exercise) return;
+        next = blocks.map((b) => (b.exercise.id === suggestion.exerciseId ? { ...b, exercise } : b));
+        break;
+      }
+      case 'sets':
+        next = blocks.map((b) => {
+          if (b.exercise.id !== suggestion.exerciseId) return b;
+          const template = b.sets.at(-1) ?? { weight: '', reps: DEFAULT_REPS };
+          const sets = Array.from({ length: suggestion.sets }, (_, i) => b.sets[i] ?? { ...template });
+          return { ...b, sets };
+        });
+        break;
+      case 'reps':
+        next = blocks.map((b) =>
+          b.exercise.id === suggestion.exerciseId
+            ? {
+                ...b,
+                repMin: suggestion.repMin,
+                repMax: suggestion.repMax,
+                sets: b.sets.map((s) => ({ ...s, reps: reps(suggestion.repMin) })),
+              }
+            : b
+        );
+        break;
+      case 'rest':
+        next = blocks.map((b) => (b.exercise.id === suggestion.exerciseId ? { ...b, restSeconds: suggestion.restSeconds } : b));
+        break;
+      case 'remove':
+        next = blocks.filter((b) => b.exercise.id !== suggestion.exerciseId);
+        break;
+      case 'add': {
+        const exercise = exercises.get(suggestion.newExerciseId);
+        if (!exercise) return;
+        next = [
+          ...blocks,
+          {
+            key: Date.now(),
+            exercise,
+            restSeconds: suggestion.restSeconds,
+            repMin: suggestion.repMin,
+            repMax: suggestion.repMax,
+            sets: Array.from({ length: suggestion.sets }, () => ({ weight: '', reps: reps(suggestion.repMin) })),
+          },
+        ];
+        break;
+      }
+    }
+    setBlocks(next);
+    persist(next);
   }
 
   function onDelete() {
@@ -136,7 +209,20 @@ export default function RoutineEditorScreen() {
           {t('routine.hint')}
         </Text>
 
-        {blocks.map((b) => (
+        {routineId !== null && (
+          <PlanReviewCard
+            planName={name}
+            blocks={blocks.map((b) => ({
+              exercise: b.exercise,
+              sets: b.sets.length,
+              reps: b.repMin && b.repMax ? `${b.repMin}-${b.repMax}` : (b.sets[0]?.reps ?? '?'),
+              restSeconds: b.restSeconds,
+            }))}
+            onApply={applySuggestion}
+          />
+        )}
+
+        {blocks.map((b, i) => (
           <SetsEditor
             key={b.key}
             exercise={b.exercise}
@@ -152,6 +238,8 @@ export default function RoutineEditorScreen() {
             }
             onRemoveSet={(i) => updateBlock(b.key, (x) => ({ ...x, sets: x.sets.filter((_, j) => j !== i) }))}
             onRemove={() => setBlocks((all) => all.filter((x) => x.key !== b.key))}
+            onMoveUp={i > 0 ? () => moveBlock(i, -1) : undefined}
+            onMoveDown={i < blocks.length - 1 ? () => moveBlock(i, 1) : undefined}
             onInfo={() => router.push({ pathname: '/exercise/[id]', params: { id: String(b.exercise.id) } })}
           />
         ))}
